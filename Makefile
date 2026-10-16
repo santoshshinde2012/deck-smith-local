@@ -73,7 +73,8 @@ smoke-api: ## Drive the containerised API end to end with curl (needs up-instabo
 	scripts/smoke_api.sh
 
 audit: ## Known-vulnerability audit of the locked dependencies
-	$(PY) -m pip_audit --strict --progress-spinner off
+	mkdir -p out && uv export --frozen --all-extras --no-emit-project --no-hashes -q -o out/requirements.lock.txt
+	$(PY) -m pip_audit --strict --progress-spinner off --disable-pip --no-deps -r out/requirements.lock.txt
 
 docker-lint: ## Hadolint the Dockerfiles
 	docker run --rm -i hadolint/hadolint < docker/agent/Dockerfile && docker run --rm -i hadolint/hadolint < docker/mlflow/Dockerfile

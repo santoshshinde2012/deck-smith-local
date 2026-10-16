@@ -12,7 +12,7 @@ jobs:
       matrix: { dockerfile: [docker/agent/Dockerfile, docker/mlflow/Dockerfile] }
     steps:
       - uses: actions/checkout@v4
-      - uses: hadolint/hadolint-action@v3.1.0
+      - uses: hadolint/hadolint-action@v3.5.0
         with: { dockerfile: "${{ matrix.dockerfile }}", failure-threshold: warning }
 
   images:
@@ -35,7 +35,7 @@ jobs:
           output-file: sbom-${{ matrix.name }}.cdx.json
           upload-artifact: true
       - name: trivy (fail on fixable HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: decksmith-${{ matrix.name }}:ci
           severity: HIGH,CRITICAL
@@ -44,7 +44,7 @@ jobs:
           format: table
       - name: trivy (SARIF to code scanning)
         if: always() && github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: decksmith-${{ matrix.name }}:ci
           format: sarif

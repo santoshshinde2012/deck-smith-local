@@ -25,7 +25,7 @@ jobs:
       - name: golden set
         run: uv run python -m decksmith.seed.generate && uv run python -m decksmith.evaluation.harness
       - name: dependency audit
-        run: uv run pip-audit --strict --progress-spinner off --skip-editable
+        run: uv export --frozen --all-extras --no-emit-project --no-hashes -o "$RUNNER_TEMP/req.txt" && uv run pip-audit --strict --progress-spinner off --disable-pip --no-deps -r "$RUNNER_TEMP/req.txt"
       - uses: actions/upload-artifact@v4
         if: matrix.python == '3.12'
         with: { name: coverage, path: coverage.xml }

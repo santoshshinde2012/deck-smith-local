@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from contextlib import ExitStack
 from typing import Any
 
 from langgraph.checkpoint.memory import InMemorySaver
@@ -20,17 +19,30 @@ class InMemoryStateStore:
 
 
 class PostgresStateStore:
-    """LangGraph PostgresSaver. Point the DSN at local Postgres, or at Lakebase on Databricks."""
+    """LangGraph PostgresSaver over a connection pool. Point the DSN at local Postgres, or at Lakebase.
 
-    def __init__(self, dsn: str) -> None:
+    A pool (not one shared connection) because callers such as ``mlflow.genai.evaluate`` run the
+    graph from several threads; the pool also replaces connections the server has closed.
+    """
+
+    def __init__(self, dsn: str, *, max_size: int = 8) -> None:
         from langgraph.checkpoint.postgres import PostgresSaver
+        from psycopg.rows import dict_row
+        from psycopg_pool import ConnectionPool
 
-        self._stack = ExitStack()
-        self._saver = self._stack.enter_context(PostgresSaver.from_conn_string(dsn))
+        self._pool: ConnectionPool[Any] = ConnectionPool(
+            dsn,
+            min_size=1,
+            max_size=max_size,
+            kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row},
+            check=ConnectionPool.check_connection,
+            open=True,
+        )
+        self._saver = PostgresSaver(self._pool)
         self._saver.setup()
 
     def checkpointer(self) -> Any:
         return self._saver
 
     def close(self) -> None:
-        self._stack.close()
+        self._pool.close()
