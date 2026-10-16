@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "DeckSmith on a laptop: a Databricks-shaped local stack for the PowerPoint agent (ports and adapters)."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Proprietary" }
+license = { text = "MIT" }
 authors = [{ name = "Santosh Shinde" }]
 dependencies = [
   "pydantic>=2.8",
