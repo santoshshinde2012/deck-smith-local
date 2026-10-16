@@ -12,7 +12,10 @@ set -Eeuo pipefail
 
 REPO_URL="${DECKSMITH_REPO:-https://github.com/santoshshinde2012/deck-smith-local.git}"
 REF="${DECKSMITH_REF:-main}"
-WORK="${DECKSMITH_WORKDIR:-/data/work}"
+# InstaBox keeps home and the workspace on the 20 GB /data disk (/data/workspace is user-writable).
+if [ -n "${DECKSMITH_WORKDIR:-}" ]; then WORK="$DECKSMITH_WORKDIR"
+elif [ -w /data/workspace ]; then WORK=/data/workspace
+else WORK="$HOME/work"; fi
 DIR="$WORK/deck-smith-local"
 SUDO=""; [ "$(id -u)" -eq 0 ] || SUDO="sudo"
 
