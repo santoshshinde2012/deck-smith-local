@@ -33,7 +33,7 @@ ensure_tools() {
   local missing=()
   for t in git make curl; do command -v "$t" >/dev/null || missing+=("$t"); done
   python3 -c "import venv, ensurepip" 2>/dev/null || missing+=(python3-venv)
-  if [ ${#missing[@]} -gt 0 ]; then $SUDO apt-get update -qq && $SUDO apt-get install -y -qq "${missing[@]}"; fi
+  if [ ${#missing[@]} -gt 0 ]; then $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update -qq && $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}"; fi
   command -v uv >/dev/null || { curl -LsSf https://astral.sh/uv/install.sh | sh; export PATH="$HOME/.local/bin:$PATH"; }
 }
 
