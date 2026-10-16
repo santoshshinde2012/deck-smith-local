@@ -19,6 +19,8 @@ from decksmith.application.nodes import DeckNodes
 from decksmith.application.service import DeckService
 from decksmith.application.sql import SqlCompiler
 from decksmith.config import Settings
+from decksmith.domain.errors import ConfigurationError
+from decksmith.observability import configure_logging
 from decksmith.ports import (
     Catalog,
     DataSource,
@@ -90,8 +92,6 @@ def _static(_: Settings) -> IdentityProvider:
 def _jwt(s: Settings) -> IdentityProvider:
     from decksmith.adapters.local.identity import JwtIdentity
 
-    if not s.jwt_secret:
-        raise ValueError("DECKSMITH_JWT_SECRET is required for identity=jwt")
     return JwtIdentity(s.jwt_secret)
 
 
@@ -117,7 +117,7 @@ def _catalog(s: Settings, source: DataSource) -> Catalog:
     from decksmith.adapters.local.policy_catalog import PerUserViewCatalog
 
     if not isinstance(source, DuckDBDataSource):
-        raise ValueError("per-user-view catalogs need the duckdb data source")
+        raise ConfigurationError("per-user-view catalogs need the duckdb data source")
     views: Catalog = PerUserViewCatalog(source.view_exists)
     if s.catalog == "uc_oss":
         from decksmith.adapters.local.uc_oss_catalog import UnityCatalogOssCatalog
@@ -161,6 +161,7 @@ def build_container(
 ) -> Container:
     """Wire everything. Keyword overrides let tests inject fakes without touching settings."""
     s = settings or Settings()
+    configure_logging(s.log_level, s.log_json)
     llm = llm or LLMS[s.llm](s)
     source = source or SOURCES[s.data_source](s)
     catalog = catalog or _catalog(s, source)

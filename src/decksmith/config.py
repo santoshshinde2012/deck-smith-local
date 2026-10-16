@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Literal
 
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ROOT = Path(__file__).resolve().parents[2]
+# Project root: the checkout in development, DECKSMITH_HOME (/app) inside the container image.
+ROOT = Path(os.environ.get("DECKSMITH_HOME") or Path(__file__).resolve().parents[2])
 
 
 class Settings(BaseSettings):
@@ -34,8 +37,31 @@ class Settings(BaseSettings):
     uc_oss_url: str = "http://localhost:8081"
     jwt_secret: str = ""
     env: str = "local"
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    log_json: bool = True
+    max_request_chars: int = Field(default=2000, ge=10, le=20000)
 
     # Databricks (tier L3).
     databricks_host: str = ""
     databricks_warehouse_id: str = ""
     databricks_catalog: str = "main"
+
+    @model_validator(mode="after")
+    def _check_combination(self) -> Settings:
+        """Fail fast at start-up on an adapter combination that cannot work."""
+        problems: list[str] = []
+        if self.llm == "portkey" and not self.portkey_config_dir.is_dir():
+            problems.append(f"llm=portkey needs portkey_config_dir ({self.portkey_config_dir}) to exist")
+        if self.data_source == "databricks" and not (self.databricks_host and self.databricks_warehouse_id):
+            problems.append("data_source=databricks needs databricks_host and databricks_warehouse_id")
+        if self.catalog == "unity_catalog" and self.data_source != "databricks":
+            problems.append("catalog=unity_catalog needs data_source=databricks")
+        if self.catalog in ("per_user_views", "uc_oss") and self.data_source != "duckdb":
+            problems.append(f"catalog={self.catalog} needs data_source=duckdb")
+        if self.identity == "jwt" and len(self.jwt_secret) < 32:
+            problems.append("identity=jwt needs DECKSMITH_JWT_SECRET of at least 32 characters")
+        if self.databricks_host and not self.databricks_host.startswith("https://"):
+            problems.append("databricks_host must start with https://")
+        if problems:
+            raise ValueError("; ".join(problems))
+        return self

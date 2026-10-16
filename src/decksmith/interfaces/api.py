@@ -11,20 +11,17 @@ from pydantic import BaseModel, Field
 
 from decksmith.application.service import Action, RunView
 from decksmith.bootstrap import Container, build_container
-from decksmith.domain.errors import (
-    AuthenticationError,
-    DeckSmithError,
-    InvalidParameters,
-    RunNotFound,
-    UnknownTemplate,
-)
+from decksmith.domain.errors import AuthenticationError, DeckSmithError, InvalidParameters
 from decksmith.domain.principal import Principal
+from decksmith.observability import get_logger
+
+log = get_logger(__name__)
 
 PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
 
 class StartRequest(BaseModel):
-    request: str = Field(min_length=3, max_length=2000)
+    request: str = Field(min_length=3, max_length=20000)
 
 
 class DecisionRequest(BaseModel):
@@ -48,15 +45,10 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.state.container = container or build_container()
 
     @app.exception_handler(DeckSmithError)
-    async def _errors(_: Request, exc: DeckSmithError) -> JSONResponse:
-        code = (
-            404
-            if isinstance(exc, RunNotFound)
-            else 422
-            if isinstance(exc, InvalidParameters | UnknownTemplate)
-            else getattr(exc, "status_code", 500)
-        )
-        return JSONResponse({"error": type(exc).__name__, "detail": str(exc)}, status_code=code)
+    async def _errors(request: Request, exc: DeckSmithError) -> JSONResponse:
+        log.warning("request_failed", extra={"error_code": exc.code, "path": request.url.path})
+        body = {"error": exc.code, "category": exc.category, "retryable": exc.retryable, "detail": str(exc)}
+        return JSONResponse(body, status_code=exc.status_code)
 
     @app.get("/healthz")
     def healthz() -> dict[str, Any]:
@@ -75,6 +67,8 @@ def create_app(container: Container | None = None) -> FastAPI:
 
     @app.post("/v1/decks", response_model=RunView)
     def start(body: StartRequest, user: User) -> RunView:
+        if len(body.request) > app.state.container.settings.max_request_chars:
+            raise InvalidParameters("request is longer than DECKSMITH_MAX_REQUEST_CHARS")
         return app.state.container.service.start(body.request, user)  # type: ignore[no-any-return]
 
     @app.post("/v1/decks/{run_id}/decision", response_model=RunView)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from typing import Any, Literal
 
@@ -11,6 +12,9 @@ from pydantic import BaseModel
 from decksmith.application.context import acting_as
 from decksmith.domain.errors import RunNotFound
 from decksmith.domain.principal import Principal
+from decksmith.observability import bind_run_id, get_logger, reset_run_id
+
+log = get_logger(__name__)
 
 Action = Literal["approve", "edit", "reject"]
 
@@ -45,15 +49,33 @@ class DeckService:
             "status": "intake",
             "usage": [],
         }
-        with acting_as(principal):
-            self._graph.invoke(state, self._config(run_id))
-        return self.get(run_id, principal)
+        return self._run(run_id, principal, state, "run_started")
 
     def decide(self, run_id: str, action: Action, principal: Principal, feedback: str = "") -> RunView:
         self._owned(run_id, principal)
-        with acting_as(principal):
-            self._graph.invoke(Command(resume={"action": action, "feedback": feedback}), self._config(run_id))
-        return self.get(run_id, principal)
+        return self._run(
+            run_id, principal, Command(resume={"action": action, "feedback": feedback}), "run_decided", action=action
+        )
+
+    def _run(self, run_id: str, principal: Principal, graph_input: Any, event: str, **fields: str) -> RunView:
+        token = bind_run_id(run_id)
+        started = time.perf_counter()
+        try:
+            log.info(event, extra=fields)
+            with acting_as(principal):
+                self._graph.invoke(graph_input, self._config(run_id))
+            view = self.get(run_id, principal)
+            log.info(
+                "run_step_finished",
+                extra={
+                    "status": view.status,
+                    "facts": len(view.facts),
+                    "duration_ms": round((time.perf_counter() - started) * 1000),
+                },
+            )
+            return view
+        finally:
+            reset_run_id(token)
 
     def get(self, run_id: str, principal: Principal) -> RunView:
         values = self._owned(run_id, principal)

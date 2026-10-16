@@ -12,10 +12,11 @@ from pathlib import Path
 from typing import Any
 
 from decksmith.application.service import DeckService
+from decksmith.config import ROOT
 from decksmith.domain.principal import Principal
 from decksmith.evaluation.scorers import SCORERS
 
-GOLDEN = Path(__file__).resolve().parents[3] / "evals" / "golden" / "golden.jsonl"
+GOLDEN = ROOT / "evals" / "golden" / "golden.jsonl"
 
 
 def load_golden(path: Path = GOLDEN) -> list[dict[str, Any]]:

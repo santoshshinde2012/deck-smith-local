@@ -3,16 +3,23 @@ PY ?= .venv/bin/python
 COMPOSE ?= docker compose
 
 .DEFAULT_GOAL := help
-.PHONY: help venv install up up-app down logs ps seed publish test unit e2e eval lint type check api ui demo stack-test clean
+.PHONY: help venv install lock up up-app up-instabox down logs ps seed publish test unit contract e2e e2e-stack eval lint type audit check api ui demo stack-test smoke-api docker-lint sbom clean
 
 help: ## Show targets
-	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-12s %s\n", $$1, $$2}'
+	@grep -E '^[a-z0-9-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-12s %s\n", $$1, $$2}'
 
 venv: ## Create .venv
 	python3 -m venv .venv
 
-install: ## Install the package with dev and ui extras
-	$(PY) -m pip install -U pip && $(PY) -m pip install -e ".[dev,ui,publish]"
+install: ## Install the package (locked versions when uv is available) with dev, ui and publish extras
+	@if command -v uv >/dev/null 2>&1; then \
+	  UV_PROJECT_ENVIRONMENT=.venv uv sync --locked --all-extras; \
+	else \
+	  $(PY) -m pip install -U pip && $(PY) -m pip install -e ".[dev,ui,publish]"; \
+	fi
+
+lock: ## Refresh uv.lock after changing dependencies
+	uv lock
 
 up: ## Start the core profile (Postgres, MLflow, UC OSS, Portkey, RustFS)
 	$(COMPOSE) --profile core up -d --build
@@ -20,8 +27,11 @@ up: ## Start the core profile (Postgres, MLflow, UC OSS, Portkey, RustFS)
 up-app: ## Also run the agent API and UI in containers
 	$(COMPOSE) --profile core --profile app up -d --build
 
+up-instabox: ## Lean profile for a 4 vCPU / 8 GB VM (Postgres, MLflow, Portkey, agent)
+	$(COMPOSE) --profile instabox up -d --build --wait
+
 down: ## Stop everything
-	$(COMPOSE) --profile core --profile app down
+	$(COMPOSE) --profile core --profile app --profile instabox down
 
 ps: ## Service status
 	$(COMPOSE) --profile core --profile app ps
@@ -42,21 +52,39 @@ type: ## Mypy (strict)
 	$(PY) -m mypy
 
 unit: ## Unit and architecture tests
-	$(PY) -m pytest tests/unit tests/architecture
+	$(PY) -m pytest tests/unit tests/architecture --no-cov
+
+contract: ## Contract tests: every adapter of a port behaves the same
+	$(PY) -m pytest tests/contract --no-cov
 
 test: ## All offline tests (unit, architecture, integration, e2e with the fake LLM)
 	$(PY) -m pytest
 
 e2e: ## E1-E8 scenarios offline (E9-E11 skip with reasons)
-	$(PY) -m pytest -m e2e -rs
+	$(PY) -m pytest -m e2e -rs --no-cov
+
+e2e-stack: ## E1-E8 plus the live-service tests, against a running stack (Postgres checkpoints, MLflow)
+	DECKSMITH_STATE_STORE=postgres $(PY) -m pytest -m "e2e or stack" -rs --no-cov --junitxml=out/e2e-junit.xml
 
 stack-test: ## Tests that need `make up` (Postgres resume, Portkey)
-	DECKSMITH_STATE_STORE=postgres $(PY) -m pytest -m stack -rs
+	DECKSMITH_STATE_STORE=postgres $(PY) -m pytest -m stack -rs --no-cov
+
+smoke-api: ## Drive the containerised API end to end with curl (needs up-instabox or up-app)
+	scripts/smoke_api.sh
+
+audit: ## Known-vulnerability audit of the locked dependencies
+	$(PY) -m pip_audit --strict --progress-spinner off
+
+docker-lint: ## Hadolint the Dockerfiles
+	docker run --rm -i hadolint/hadolint < docker/agent/Dockerfile && docker run --rm -i hadolint/hadolint < docker/mlflow/Dockerfile
+
+sbom: ## CycloneDX SBOM of the Python environment into out/sbom.json
+	mkdir -p out && uvx --from cyclonedx-bom cyclonedx-py environment $(PY) -o out/sbom.json
 
 eval: ## Golden set; add ARGS=--mlflow to log to MLflow
 	$(PY) -m decksmith.evaluation.harness $(ARGS)
 
-check: lint type test ## Everything CI runs
+check: lint type test ## Everything CI runs (lint, types, all offline tests with the coverage gate)
 
 api: ## Run the API natively on :8000
 	$(PY) -m uvicorn --factory decksmith.interfaces.api:app --port 8000 --reload
