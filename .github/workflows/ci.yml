@@ -24,7 +24,7 @@ jobs:
       - name: e2e (E1-E8, fake LLM, no keys)
         run: pytest -m e2e -rs
       - name: golden set
-        run: python -m decksmith.evaluation.harness
+        run: python -m decksmith.seed.generate && python -m decksmith.evaluation.harness
 
   compose:
     runs-on: ubuntu-latest
