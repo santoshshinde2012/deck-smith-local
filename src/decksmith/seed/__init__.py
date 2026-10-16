@@ -1,1 +1,1 @@
-"""Synthetic seed data (seed 42), modelled on retention-radar. No real customer data anywhere."""
+"""Synthetic seed data (seed 42) for a three-plan subscription business. No real customer data anywhere."""

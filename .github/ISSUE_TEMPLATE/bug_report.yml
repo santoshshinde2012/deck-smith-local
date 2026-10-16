@@ -1,0 +1,18 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes: { label: What happened, description: Include the command you ran and the output. }
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes: { label: What you expected }
+    validations: { required: true }
+  - type: input
+    id: env
+    attributes: { label: Environment, placeholder: "macOS 15 / Apple M3, Python 3.12, Docker 29" }
+  - type: dropdown
+    id: mode
+    attributes: { label: Mode, options: ["offline (fake LLM)", "local stack (make up)", "Databricks adapters"] }

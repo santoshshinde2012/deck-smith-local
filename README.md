@@ -1,15 +1,31 @@
 # deck-smith-local
 
-DeckSmith is the PowerPoint agent designed in [pptx-agent-databricks-research](https://github.com/santoshshinde2012/pptx-agent-databricks-research). This repository runs it on a laptop, using a stack shaped like Databricks.
+[![CI](https://github.com/santoshshinde2012/deck-smith-local/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/santoshshinde2012/deck-smith-local/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 
-You can work in two modes:
+DeckSmith is an AI agent that builds PowerPoint decks from governed data. This repository runs it on a laptop, on a local stack that has the same shape as Databricks. The code uses ports and adapters (SOLID), so moving to Databricks changes configuration, not code. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
-- **Offline.** The whole agent runs with a fake LLM and needs no keys and no Docker. CI uses this mode.
-- **Local stack.** Docker Compose runs Unity Catalog OSS, MLflow 3, Postgres, the Portkey OSS gateway and an S3-compatible store. Ollama runs natively on Apple Silicon.
+> All data is synthetic: seed 42, about 8,000 subscriptions. No real customer data is used anywhere.
 
-The code follows ports and adapters (SOLID). Moving to Databricks means changing configuration, not code. See [ARCHITECTURE.md](ARCHITECTURE.md).
+## What this is, and what it is not
 
-> All data is synthetic: seed 42, about 8,000 subscriptions, modelled on retention-radar. No real customer data is used anywhere.
+| This is | This is not |
+| --- | --- |
+| A runnable reference: a LangGraph agent that plans a deck, waits for human approval, pulls numbers only through approved SQL, and renders a native `.pptx` | A hosted product or a managed service |
+| An offline loop: the fake LLM means every test runs in CI with no keys and no network | A benchmark of model quality (the fake LLM is deterministic by design) |
+| A local stand-in for Databricks pieces (Unity Catalog OSS, MLflow 3, Postgres in place of Lakebase, the Portkey gateway) | A security boundary: per-user views only emulate row filters |
+| Clean seams for Databricks adapters (SQL Statement API, Unity Catalog, Apps on-behalf-of login) | Verified against a live Databricks workspace; that is a later phase |
+
+## The design in brief
+
+- **The LLM never writes SQL.** The planner picks from approved, parameterised SQL templates, which are written in Databricks SQL. Locally, sqlglot transpiles them for DuckDB.
+- **The LLM never writes numbers.** Query results become *facts* with provenance. Slides refer to them as `{{fact:fN}}`, and the renderer formats them. A guardrail and a deterministic check reject any bare digit.
+- **A human approves the outline** before any data is fetched. The run pauses and resumes from a checkpoint.
+- **Data is fetched as the user.** A user who can see no data gets a clear refusal, not an empty deck.
+- **Every step is traced**, and a golden set of prompts is scored on each change.
+
+The design is documented in this repo: [ARCHITECTURE.md](ARCHITECTURE.md), the [decision records](docs/decisions.md) and the [test plan](docs/test-plan.md).
 
 ## Index
 
@@ -17,13 +33,16 @@ The code follows ports and adapters (SOLID). Moving to Databricks means changing
 | --- | --- |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Layers, ports and adapters, the graph, SOLID principle by principle, fidelity of the local emulation |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, workflow, quality gates, the dependency rule |
+| [SECURITY.md](SECURITY.md) | How to report a vulnerability |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community standards |
+| [docs/decisions.md](docs/decisions.md) | Architecture decision records |
+| [docs/test-plan.md](docs/test-plan.md) | Fidelity tiers L0–L4, scenarios E1–E11, phases LD0–LD4 |
 | [CHANGELOG.md](CHANGELOG.md) | Releases |
-| [.env.example](.env.example) | Every setting; adapter selection |
+| [.env.example](.env.example) | Every setting, including adapter selection |
 | [docker-compose.yml](docker-compose.yml) | `core` and `app` profiles |
-| [configs/portkey/](configs/portkey) | Gateway configs for each tier (Ollama first, then Bedrock EU) |
-| [src/decksmith/sql/templates/](src/decksmith/sql/templates) | The approved SQL templates (Databricks SQL) |
+| [configs/portkey/](configs/portkey) | Example gateway configs for each tier |
+| [src/decksmith/sql/templates/](src/decksmith/sql/templates) | The approved SQL templates |
 | [evals/golden/golden.jsonl](evals/golden/golden.jsonl) | Ten golden prompts with expectations |
-| [Local development environment](https://github.com/santoshshinde2012/pptx-agent-databricks-research/blob/main/docs/08-delivery-roadmap/06-local-development-environment.md) | The design this repo implements (tiers L0–L4, scenarios E1–E11, phases LD0–LD4) |
 
 ## Quick start (offline, about two minutes)
 
@@ -111,4 +130,4 @@ This repo implements phases LD0–LD1 of the local plan. Next:
 - `spark` and `airflow` compose profiles for SQL parity on Delta.
 - LD3: hybrid runs against a Databricks workspace (E9–E10).
 
-Items marked [unv] need checking by the named owner. The Bedrock model IDs in `configs/portkey` are placeholders [unv: owner platform team].
+The model IDs in `configs/portkey` are **examples only**. Replace them with the models you have access to.

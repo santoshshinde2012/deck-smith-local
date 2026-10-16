@@ -1,6 +1,6 @@
 # Architecture
 
-DeckSmith-local is the DeckSmith agent with its infrastructure swapped for local stand-ins. The design comes from the research repo ([pptx-agent-databricks-research](https://github.com/santoshshinde2012/pptx-agent-databricks-research)). The local tiers and the E1–E11 scenarios are defined on its [local development environment](https://github.com/santoshshinde2012/pptx-agent-databricks-research/blob/main/docs/08-delivery-roadmap/06-local-development-environment.md) page.
+DeckSmith-local is the DeckSmith agent with its infrastructure swapped for local stand-ins. The [design summary](README.md#the-design-in-brief) in the README explains what DeckSmith is.  The [decision records](docs/decisions.md) and the [test plan](docs/test-plan.md) complete the design.
 
 The code uses ports and adapters, also called hexagonal architecture. The agent's logic depends only on small interfaces called ports. Every concrete technology sits behind one of those ports. That means the same graph can run on DuckDB with a fake LLM in CI, or on the Databricks SQL Statement API with on-behalf-of (OBO) user tokens, and the only thing that changes is configuration.
 
@@ -233,8 +233,8 @@ Tests use the same root and override only what they need. For example, `build_co
 | Lakebase checkpoints | Postgres 16 with LangGraph `PostgresSaver` | Same saver. |
 | Managed MLflow | MLflow 3 OSS server with a Postgres store | Same tracing and `genai.evaluate` APIs. |
 | Portkey Enterprise hybrid | Portkey OSS gateway; configs sent inline in `x-portkey-config` | No stored configs, budgets or virtual keys locally. The 446 guardrail is emulated in code. |
-| Databricks SQL warehouse | DuckDB with sqlglot transpiling Databricks SQL | Parity is scenario E9, tier L3 [unv: owner platform team]. |
-| S3 or UC volumes | RustFS (S3-compatible). Docker Hub no longer serves `minio/minio`, so RustFS replaces MinIO, as in the local-data-lakehouse repo. | S3 API only. |
+| Databricks SQL warehouse | DuckDB with sqlglot transpiling Databricks SQL | Parity is scenario E9, tier L3, and has not been verified yet. |
+| S3 or UC volumes | RustFS (S3-compatible). Docker Hub no longer serves `minio/minio`, so RustFS replaces MinIO. | S3 API only. |
 
 ## Adding an adapter
 

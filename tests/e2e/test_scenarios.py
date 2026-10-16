@@ -1,4 +1,4 @@
-"""E1-E11 from the research repo's local-development page, run offline with the fake LLM.
+"""E1-E11 from the DeckSmith local-development test plan (see README), run offline with the fake LLM.
 
 E1-E8 run here. Parts that need running services are marked `stack` and skip without `make up`.
 E9-E11 need a Databricks workspace or staging and are skipped with the reason.
