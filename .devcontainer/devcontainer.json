@@ -1,6 +1,6 @@
 {
   "name": "deck-smith-local",
-  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "image": "mcr.microsoft.com/devcontainers/base:bookworm",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},
     "ghcr.io/va-h/devcontainers-features/uv:1": {}
@@ -9,7 +9,7 @@
     "cpus": 4,
     "memory": "8gb"
   },
-  "postCreateCommand": "uv sync --locked --all-extras && .venv/bin/pre-commit install && make seed",
+  "postCreateCommand": "uv python install 3.12 && uv sync --locked --all-extras --python 3.12 && .venv/bin/pre-commit install && make seed",
   "forwardPorts": [
     8000,
     8501,
