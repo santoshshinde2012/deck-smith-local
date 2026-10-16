@@ -50,7 +50,7 @@ filterwarnings = ["ignore::DeprecationWarning", "ignore::FutureWarning", "ignore
 line-length = 120
 target-version = "py311"
 src = ["src", "tests"]
-extend-exclude = ["scripts/mermaid_style.py"]  # copied verbatim from the research repo
+extend-exclude = ["scripts/mermaid_style.py"]  # shared diagram theme, kept verbatim
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "SLF"]
