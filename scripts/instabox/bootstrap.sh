@@ -39,11 +39,22 @@ ensure_tools() {
 
 ensure_docker() {
   if ! command -v docker >/dev/null; then curl -fsSL https://get.docker.com | $SUDO sh; fi
-  # The system disk is small; keep images and volumes on the 20 GB /data disk.
-  if [ -d /data ] && [ "$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || $SUDO docker info --format '{{.DockerRootDir}}')" != "/data/docker" ]; then
-    $SUDO mkdir -p /data/docker /etc/docker
+  # The system disk is small; keep images, build cache and volumes on the 20 GB /data disk.
+  # Docker 29 stores images in containerd (/var/lib/containerd), so move both roots.
+  if [ -d /data ] && [ ! -f /data/.decksmith-docker-moved ]; then
+    $SUDO mkdir -p /data/docker /data/containerd /etc/docker /etc/containerd
     echo '{ "data-root": "/data/docker" }' | $SUDO tee /etc/docker/daemon.json >/dev/null
-    $SUDO systemctl restart docker 2>/dev/null || $SUDO service docker restart
+    if [ -f /etc/containerd/config.toml ] && grep -qE '^#?root[[:space:]]*=' /etc/containerd/config.toml; then
+      $SUDO sed -i -E 's|^#?root[[:space:]]*=.*|root = "/data/containerd"|' /etc/containerd/config.toml
+    elif [ -f /etc/containerd/config.toml ]; then
+      $SUDO sed -i '1i root = "/data/containerd"' /etc/containerd/config.toml
+    else
+      echo 'root = "/data/containerd"' | $SUDO tee /etc/containerd/config.toml >/dev/null
+    fi
+    $SUDO systemctl stop docker docker.socket 2>/dev/null || true
+    $SUDO systemctl restart containerd 2>/dev/null || true
+    $SUDO systemctl start docker 2>/dev/null || $SUDO service docker restart
+    $SUDO touch /data/.decksmith-docker-moved
   fi
   docker info >/dev/null 2>&1 || { $SUDO usermod -aG docker "$USER" 2>/dev/null || true; DOCKER="$SUDO docker"; }
   ${DOCKER:-docker} compose version >/dev/null
