@@ -2,6 +2,18 @@
 
 All notable changes are listed here. The format follows Keep a Changelog, and versions follow SemVer.
 
+## [Unreleased]
+
+### Added
+
+- Contract tests for every port, and a 90% coverage gate.
+- An error taxonomy (`docs/errors.md`), JSON logs carrying `run_id`, and start-up config validation.
+- `uv.lock`, Dependabot, CodeQL, trivy, an SBOM, hadolint and pip-audit.
+- Release automation with release-please.
+- Non-root multi-stage images, plus healthchecks and resource limits in Compose.
+- The `instabox` lean profile, `scripts/instabox/bootstrap.sh`, `scripts/smoke_api.sh`, the `instabox-e2e` workflow and the `stack-e2e` CI job.
+- A devcontainer, ADRs D9–D14, and a README walkthrough and architecture diagram.
+
 ## [0.1.1] - 2026-10-16
 
 ### Changed

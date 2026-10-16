@@ -1,0 +1,55 @@
+name: supply-chain
+on:
+  push: { branches: [main] }
+  pull_request:
+    paths: ["docker/**", "pyproject.toml", "uv.lock", "docker-compose.yml", ".github/workflows/supply-chain.yml"]
+  schedule: [{ cron: "41 4 * * 1" }]
+permissions: { contents: read }
+jobs:
+  hadolint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: { dockerfile: [docker/agent/Dockerfile, docker/mlflow/Dockerfile] }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hadolint/hadolint-action@v3.1.0
+        with: { dockerfile: "${{ matrix.dockerfile }}", failure-threshold: warning }
+
+  images:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, security-events: write }
+    strategy:
+      matrix:
+        include:
+          - { name: agent, context: ., file: docker/agent/Dockerfile }
+          - { name: mlflow, context: docker/mlflow, file: docker/mlflow/Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+      - name: build
+        run: docker build -t decksmith-${{ matrix.name }}:ci -f ${{ matrix.file }} ${{ matrix.context }}
+      - name: SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          image: decksmith-${{ matrix.name }}:ci
+          format: cyclonedx-json
+          output-file: sbom-${{ matrix.name }}.cdx.json
+          upload-artifact: true
+      - name: trivy (fail on fixable HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: decksmith-${{ matrix.name }}:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+      - name: trivy (SARIF to code scanning)
+        if: always() && github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: decksmith-${{ matrix.name }}:ci
+          format: sarif
+          output: trivy-${{ matrix.name }}.sarif
+          exit-code: "0"
+      - if: always() && github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@v3
+        with: { sarif_file: "trivy-${{ matrix.name }}.sarif", category: "trivy-${{ matrix.name }}" }

@@ -1,0 +1,29 @@
+name: release
+# Semantic versioning from Conventional Commits: release-please opens a release PR that bumps
+# pyproject.toml and CHANGELOG.md; merging it tags vX.Y.Z, creates the GitHub release and attaches
+# the wheel, sdist and SBOM.
+on:
+  push: { branches: [main] }
+permissions: { contents: write, pull-requests: write }
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.rp.outputs.release_created }}
+      tag: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - id: rp
+        uses: googleapis/release-please-action@v4
+        with: { config-file: release-please-config.json, manifest-file: .release-please-manifest.json }
+
+  publish-artifacts:
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv build
+      - run: uv sync --locked --no-dev && uvx --from cyclonedx-bom cyclonedx-py environment .venv/bin/python -o dist/sbom.cdx.json
+      - env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh release upload "${{ needs.release-please.outputs.tag }}" dist/* --clobber

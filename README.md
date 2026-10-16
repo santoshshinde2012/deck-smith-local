@@ -27,6 +27,54 @@ DeckSmith is an AI agent that builds PowerPoint decks from governed data. This r
 
 The design is documented in this repo: [ARCHITECTURE.md](ARCHITECTURE.md), the [decision records](docs/decisions.md) and the [test plan](docs/test-plan.md).
 
+## Architecture
+
+```mermaid
+flowchart LR
+  user([User / Streamlit UI]) -->|JWT| api[FastAPI interface]
+  api --> svc[DeckService<br/>application]
+  svc --> graph[LangGraph agent<br/>plan → approve ⏸ → fetch → write → QA → render]
+  graph -->|ports only| ports{{8 Protocol ports}}
+  ports --> idp[Identity]
+  ports --> cat[Catalog]
+  ports --> ds[DataSource<br/>DuckDB per-user views · Databricks SQL]
+  ports --> llm[LLM<br/>Fake · Portkey → Ollama/remote]
+  ports --> rend[Renderer<br/>python-pptx]
+  ports --> st[StateStore<br/>memory · Postgres]
+  ports --> tr[Tracer<br/>noop · MLflow 3]
+  ports --> tpl[Templates<br/>approved SQL, sqlglot]
+  boot[[bootstrap.py<br/>composition root]] -.wires adapters.-> ports
+```
+
+Only `bootstrap.py` imports adapters, and `tests/architecture` enforces this. Each port has a contract suite in `tests/contract`, which every adapter must pass.
+
+## End-to-end walkthrough
+
+What one request goes through. Run it yourself with `make up-instabox && make smoke-api`.
+
+1. **Sign-in.** The UI or a client sends a JWT. The identity port turns it into a principal (`bob`, region `NA`). An anonymous call gets 401.
+2. **Plan.** The LLM chooses from approved SQL templates and proposes an outline. It writes no SQL and no numbers.
+3. **Approve.** The graph pauses on an interrupt. The checkpoint goes to Postgres, so a different process can resume it. `POST /v1/decks/{id}/decision` approves or rejects.
+4. **Fetch as the user.** sqlglot compiles templates from Databricks SQL to DuckDB, and they run against the user's views. A user who sees no rows (carol) gets a `no_data` refusal (409), not an empty deck.
+5. **Write and check.** Slides refer to numbers only as `{{fact:fN}}`. The guardrail rejects any bare digit (446). The QA loop retries invalid output up to three times.
+6. **Render and download.** python-pptx renders native charts and tables. `GET /v1/decks/{id}/file` returns the PPTX, and only to the run's owner; anyone else gets 404.
+7. **Observe.** Each step logs a JSON line carrying `run_id` and `duration_ms`. MLflow records a trace, and errors follow the taxonomy in [docs/errors.md](docs/errors.md).
+
+## Engineering practices
+
+| Area | What is in place |
+| --- | --- |
+| Tests | Unit, contract (per port), architecture, integration, e2e, and stack tests. CI fails below 90% branch coverage |
+| Types and style | ruff (lint and format), strict mypy, and type hints throughout |
+| Config | pydantic-settings, with start-up validation of adapter combinations (D11) |
+| Errors and logs | A stable error taxonomy (`code`, `category`, `retryable`) and JSON logs (D10) |
+| Dependencies | `uv.lock`, installs with `--locked`, Dependabot, and pip-audit (D12) |
+| Security | CodeQL, trivy, a CycloneDX SBOM, hadolint, non-root containers and `no-new-privileges` |
+| Containers | Healthchecks, memory and CPU limits, and log rotation on every service |
+| Releases | Conventional Commits, with release-please producing SemVer tags and a CHANGELOG (D13) |
+| Dev environment | `make help`, pre-commit, and a devcontainer (`.devcontainer/`) |
+| Cloud e2e | A lean profile for 8 GB InstaBox VMs, plus a manual workflow (D14, [docs/instabox.md](docs/instabox.md)) |
+
 ## Index
 
 | Document | What it covers |
@@ -104,6 +152,19 @@ make stack-test    # E3 resume from Postgres, E6 gateway reachable
 | Agent API | 8000 | Databricks App backend |
 | Streamlit UI | 8501 | Databricks App front end |
 | Ollama (native) | 11434 | Bedrock models, offline |
+
+## Lean stack and InstaBox (8 GB)
+
+```bash
+cp .env.instabox .env && make up-instabox   # Postgres, MLflow, Portkey, agent image (~4 GB limits)
+make e2e-stack && make smoke-api            # E1–E8 on real Postgres, then curl drives the API
+```
+
+On a fresh [InstaBox](https://instabox.sh) VM, a single command runs everything headlessly and writes `out/instabox-summary.md`. See [docs/instabox.md](docs/instabox.md):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/santoshshinde2012/deck-smith-local/main/scripts/instabox/bootstrap.sh | bash
+```
 
 ## What is tested where
 

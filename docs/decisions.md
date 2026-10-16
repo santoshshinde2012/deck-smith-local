@@ -48,3 +48,46 @@ Each record is short: the context, the decision, and the consequences.
 
 - **Decision.** There is one span per node, and a golden set is scored with deterministic scorers through `mlflow.genai.evaluate`.
 - **Consequences.** Regressions in integrity, sources or slide count fail the evaluation.
+
+## D9. Contract tests per port, and a coverage gate
+
+- **Context.** Liskov substitution only holds if every adapter of a port behaves the same.
+- **Decision.** `tests/contract/` runs one set of assertions against every offline-constructible adapter of each port. CI fails below 90% branch coverage. The interface, UI and publisher modules are excluded, because they need a browser or live services.
+- **Consequences.** A new adapter is added to its contract fixture. A coverage drop fails the PR.
+
+## D10. Error taxonomy and structured logs
+
+- **Context.** Clients and operators need stable, machine-readable failures and correlated logs.
+- **Decision.** Every error carries `code`, `category`, `status_code` and `retryable` (see `docs/errors.md`). The API maps errors only from these attributes. Logs are JSON lines from the standard library, with `run_id` bound by a `ContextVar`. Tokens, prompts and row data are never logged.
+- **Consequences.** New errors need no interface change. Logs can be shipped as they are to any JSON log store.
+
+## D11. Fail-fast configuration
+
+- **Decision.** `Settings` (pydantic-settings) validates adapter combinations at start-up. For example, the Unity Catalog adapter requires the Databricks data source, a JWT secret must be at least 32 characters, and the Databricks host must use HTTPS.
+- **Consequences.** A misconfiguration fails when the process starts, not halfway through a run.
+
+## D12. Locked dependencies and supply-chain checks
+
+- **Decision.**
+  - `uv.lock` pins every transitive dependency. CI and the container image install with `uv sync --locked`.
+  - Dependabot updates uv, GitHub Actions, Docker and Compose dependencies.
+  - CodeQL scans Python and workflows.
+  - Images are linted by hadolint, scanned by trivy (failing on fixable HIGH and CRITICAL findings) and get a CycloneDX SBOM.
+  - pip-audit checks the lock.
+  - Containers run as non-root users with `no-new-privileges`, and every service has a healthcheck and a memory limit.
+- **Consequences.** Builds are reproducible. Vulnerable dependencies surface as PRs or failed checks.
+
+## D13. Semantic versioning with release-please
+
+- **Decision.** Commits follow Conventional Commits. release-please maintains a release PR that bumps the version and CHANGELOG. Merging it tags `vX.Y.Z` and attaches the wheel, sdist and SBOM to the GitHub release.
+- **Consequences.** Version numbers follow the change type. No release is created by hand.
+
+## D14. A lean profile for 8 GB cloud VMs (InstaBox)
+
+- **Context.** Contributors without a 16 GB Mac, and CI, need a real end-to-end run on a small VM.
+- **Decision.**
+  - The `instabox` Compose profile runs Postgres, MLflow, Portkey and the agent image, about 4 GB of memory limits in total; MLflow alone peaks around 1.6 GB at start-up. It leaves out Unity Catalog OSS, the object store and Ollama.
+  - It uses the fake LLM by default. A remote model is opt-in through Portkey, with keys kept in the InstaBox vault.
+  - `scripts/instabox/bootstrap.sh` runs headlessly and writes a Markdown summary and JUnit XML.
+  - The same profile runs in CI (`stack-e2e`). A manual workflow provisions a real InstaBox VM, using the `INSTABOX_API_KEY` repo secret.
+- **Consequences.** The end-to-end path is tested on every PR, and on demand on a fresh VM.

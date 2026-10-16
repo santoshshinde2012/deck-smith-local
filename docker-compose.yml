@@ -41,7 +41,7 @@ services:
       mlflow server --host 0.0.0.0 --port 5000
       --backend-store-uri postgresql+psycopg2://decksmith:${POSTGRES_PASSWORD:-decksmith}@postgres:5432/mlflow
       --artifacts-destination /mlartifacts --serve-artifacts
-      --allowed-hosts "localhost,localhost:5001,127.0.0.1,127.0.0.1:5001,mlflow,mlflow:5000" --workers 2
+      --allowed-hosts "localhost,localhost:5001,127.0.0.1,127.0.0.1:5001,mlflow,mlflow:5000" --workers 1
     ports: ["5001:5000"]          # 5000 is taken by AirPlay Receiver on macOS
     volumes: [mlflow-artifacts:/mlartifacts]
     depends_on:
@@ -52,7 +52,7 @@ services:
       timeout: 3s
       retries: 18
       start_period: 20s
-    mem_limit: 1g
+    mem_limit: 2g   # startup (migrations + job executor) peaks above 1 GiB; OOM-killed at 1g on InstaBox
     cpus: 1.0
 
   unitycatalog:
@@ -106,7 +106,7 @@ services:
       DECKSMITH_DUCKDB_PATH: /app/data/lakehouse.duckdb
       DECKSMITH_OUTPUT_DIR: /app/out
     ports: ["8000:8000"]
-    volumes: ["./data:/app/data:ro", "./out:/app/out"]
+    volumes: ["./data:/app/data:ro", "agent-out:/app/out"]  # named volume so the non-root uid can write on Linux
     depends_on:
       postgres: { condition: service_healthy }
       mlflow: { condition: service_healthy }
@@ -134,3 +134,4 @@ volumes:
   pg-data:
   mlflow-artifacts:
   object-data:
+  agent-out:
