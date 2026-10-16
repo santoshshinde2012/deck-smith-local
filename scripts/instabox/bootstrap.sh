@@ -67,7 +67,12 @@ checkout() {
   cd "$DIR"
 }
 
-install() { python3 -m venv .venv && make install; }
+install() {
+  # A .venv made elsewhere (e.g. inside the devcontainer) points at an interpreter that is not here.
+  if [ -e .venv ] && ! .venv/bin/python -c "" 2>/dev/null; then rm -rf .venv; fi
+  [ -x .venv/bin/python ] || python3 -m venv .venv
+  make install
+}
 configure() { [ -f .env ] || cp .env.instabox .env; }
 stack() { make up-instabox COMPOSE="${DOCKER:-docker} compose"; }
 
