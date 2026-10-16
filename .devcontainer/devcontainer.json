@@ -5,15 +5,39 @@
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},
     "ghcr.io/va-h/devcontainers-features/uv:1": {}
   },
-  "hostRequirements": { "cpus": 4, "memory": "8gb" },
-  "containerEnv": { "UV_PROJECT_ENVIRONMENT": "${containerWorkspaceFolder}/.venv" },
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb"
+  },
   "postCreateCommand": "uv sync --locked --all-extras && .venv/bin/pre-commit install && make seed",
-  "forwardPorts": [8000, 8501, 5001, 8787],
-  "portsAttributes": { "8000": { "label": "API" }, "8501": { "label": "UI" }, "5001": { "label": "MLflow" } },
+  "forwardPorts": [
+    8000,
+    8501,
+    5001,
+    8787
+  ],
+  "portsAttributes": {
+    "8000": {
+      "label": "API"
+    },
+    "8501": {
+      "label": "UI"
+    },
+    "5001": {
+      "label": "MLflow"
+    }
+  },
   "customizations": {
     "vscode": {
-      "extensions": ["ms-python.python", "charliermarsh.ruff", "ms-python.mypy-type-checker", "bierner.markdown-mermaid"],
-      "settings": { "python.defaultInterpreterPath": ".venv/bin/python" }
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "ms-python.mypy-type-checker",
+        "bierner.markdown-mermaid"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": ".venv/bin/python"
+      }
     }
   }
 }

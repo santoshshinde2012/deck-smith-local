@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+from decksmith import __version__
 from decksmith.application.service import Action, RunView
 from decksmith.bootstrap import Container, build_container
 from decksmith.domain.errors import AuthenticationError, DeckSmithError, InvalidParameters
@@ -41,7 +42,7 @@ User = Annotated[Principal, Depends(current_user)]
 
 
 def create_app(container: Container | None = None) -> FastAPI:
-    app = FastAPI(title="DeckSmith (local)", version="0.1.0")
+    app = FastAPI(title="DeckSmith (local)", version=__version__)
     app.state.container = container or build_container()
 
     @app.exception_handler(DeckSmithError)

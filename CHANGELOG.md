@@ -14,6 +14,18 @@ All notable changes are listed here. The format follows Keep a Changelog, and ve
 - The `instabox` lean profile, `scripts/instabox/bootstrap.sh`, `scripts/smoke_api.sh`, the `instabox-e2e` workflow and the `stack-e2e` CI job.
 - A devcontainer, ADRs D9–D14, and a README walkthrough and architecture diagram.
 
+### Changed
+
+- mypy now checks `tests` as well as `src`, using the pydantic plugin.
+- `decksmith.__version__` and the API version are read from the package metadata, so `pyproject.toml` is the single source.
+
+### Fixed
+
+- The Postgres checkpointer uses a connection pool, so it is safe for threaded callers such as `mlflow.genai.evaluate`.
+- MLflow gets 2 GiB and one worker; it was killed for running out of memory at 1 GiB on 8 GB VMs.
+- The containerised agent writes decks to a named volume, because a bind mount was not writable by the non-root user on Linux.
+- The InstaBox bootstrap moves containerd's image store to `/data`, because Docker 29 filled the 16 GB system disk.
+
 ## [0.1.1] - 2026-10-16
 
 ### Changed

@@ -31,7 +31,7 @@ jobs:
           instabox exec "$BOX" --timeout 60 -- "mkdir -p ~/logs && curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/scripts/instabox/bootstrap.sh -o ~/bootstrap.sh && chmod +x ~/bootstrap.sh && (DECKSMITH_REF='${REF}' setsid nohup bash -c '~/bootstrap.sh; echo \$? > ~/logs/exit' > ~/logs/run.log 2>&1 < /dev/null &)"
       - name: wait for completion (each exec is short; the run itself continues on the VM)
         run: |
-          for i in $(seq 1 110); do
+          for _ in $(seq 1 110); do
             if instabox exec "$BOX" --timeout 30 -- "test -f ~/logs/exit"; then break; fi
             sleep 30
           done

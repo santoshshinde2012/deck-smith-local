@@ -184,7 +184,9 @@ The `Principal`, which carries the user's token, travels in a `ContextVar` (`app
 - Access problems raise `AccessDenied`.
 - Bad credentials raise `AuthenticationError`.
 
-`test_adapters_satisfy_ports` checks both sides of each port, and the application has no branches by environment.
+`test_adapters_satisfy_ports` checks both sides of each port. `tests/contract/` goes further: it runs the same behavioural assertions against every offline-constructible adapter of a port. The application has no branches by environment.
+
+Every domain error carries a stable `code`, `category`, `status_code` and `retryable` flag (see [docs/errors.md](docs/errors.md)). The API maps errors only from those attributes, so a new error needs no interface change. Logs are JSON lines with the `run_id` bound per run, and `Settings` rejects invalid adapter combinations at start-up (decisions D10 and D11).
 
 **Interface segregation.** There are eight small ports, not one "platform" object:
 
@@ -240,5 +242,5 @@ Tests use the same root and override only what they need. For example, `build_co
 
 1. Implement the port's `Protocol` in `adapters/local/` or `adapters/databricks/`. Raise the domain errors, not SDK errors.
 2. Add a factory to the matching registry in `bootstrap.py`, and add a `Literal` value in `config.py`.
-3. Add unit tests. Use `httpx.MockTransport` or a stub client; no network.
+3. Add unit tests, and add the adapter to its port's suite in `tests/contract/`. Use `httpx.MockTransport` or a stub client; no network. If the adapter needs other settings, add a rule to the validator in `config.py`.
 4. Run `make check`. The architecture test will catch any import that crosses a layer.

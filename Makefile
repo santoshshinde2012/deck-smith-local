@@ -34,10 +34,10 @@ down: ## Stop everything
 	$(COMPOSE) --profile core --profile app --profile instabox down
 
 ps: ## Service status
-	$(COMPOSE) --profile core --profile app ps
+	$(COMPOSE) --profile core --profile app --profile instabox ps
 
 logs: ## Follow logs
-	$(COMPOSE) --profile core --profile app logs -f --tail=100
+	$(COMPOSE) --profile core --profile app --profile instabox logs -f --tail=100
 
 seed: ## Build data/lakehouse.duckdb (synthetic, seed 42) with per-user views
 	$(PY) -m decksmith.seed.generate
@@ -82,7 +82,7 @@ docker-lint: ## Hadolint the Dockerfiles
 sbom: ## CycloneDX SBOM of the Python environment into out/sbom.json
 	mkdir -p out && uvx --from cyclonedx-bom cyclonedx-py environment $(PY) -o out/sbom.json
 
-eval: ## Golden set; add ARGS=--mlflow to log to MLflow
+eval: seed ## Golden set; add ARGS=--mlflow to log to MLflow
 	$(PY) -m decksmith.evaluation.harness $(ARGS)
 
 check: lint type test ## Everything CI runs (lint, types, all offline tests with the coverage gate)
