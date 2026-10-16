@@ -16,7 +16,7 @@ from decksmith.observability import JsonFormatter, bind_run_id, get_logger, rese
         {"data_source": "databricks"},
         {"catalog": "unity_catalog"},
         {"identity": "jwt", "jwt_secret": "short"},
-        {"llm": "portkey", "portkey_config_dir": Path("/nonexistent")},
+        {"llm": "portkey", "portkey_config_dir": "MISSING"},
         {
             "databricks_host": "http://insecure",
             "databricks_warehouse_id": "w",
@@ -25,7 +25,9 @@ from decksmith.observability import JsonFormatter, bind_run_id, get_logger, rese
         },
     ],
 )
-def test_settings_reject_bad_combinations(overrides: dict[str, object]) -> None:
+def test_settings_reject_bad_combinations(overrides: dict[str, object], tmp_path: Path) -> None:
+    # A path under tmp_path is guaranteed missing; "/nonexistent" exists on some Linux images.
+    overrides = {k: (tmp_path / "missing" if v == "MISSING" else v) for k, v in overrides.items()}
     with pytest.raises(ValidationError):
         Settings(_env_file=None, **overrides)  # type: ignore[arg-type]
 
