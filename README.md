@@ -44,16 +44,29 @@ The design is documented in this repo: [ARCHITECTURE.md](ARCHITECTURE.md), the [
 | [src/decksmith/sql/templates/](src/decksmith/sql/templates) | The approved SQL templates |
 | [evals/golden/golden.jsonl](evals/golden/golden.jsonl) | Ten golden prompts with expectations |
 
-## Quick start (offline, about two minutes)
+## Quick start
+
+Prerequisites: Python 3.11 or later, `make`, and git. Docker is needed only for `make up`.
 
 ```bash
+git clone https://github.com/santoshshinde2012/deck-smith-local && cd deck-smith-local
+git switch feat/core-local-stack   # until pull request #1 is merged into main
 python3 -m venv .venv && make install
+make up            # optional: Postgres, MLflow, UC OSS, Portkey, RustFS (needs about 3 GB free Docker disk)
 make seed          # data/lakehouse.duckdb, with per-user views for alice, bob and carol
 make test          # unit, architecture, integration and e2e tests (fake LLM)
 make demo          # one deck each for bob (all regions), alice (EU-West) and carol (no access)
 make api           # http://localhost:8000/docs
 make ui            # http://localhost:8501 (in a second terminal)
 ```
+
+`make demo` works with or without `make up`. By default it uses the fake LLM, DuckDB and in-memory state. See [Local stack](#local-stack-apple-silicon-16-gb-or-more) to switch to the services.
+
+### Sample output
+
+This is the deck `make demo` produces for bob ([download the .pptx](docs/examples/sample-deck.pptx)). The charts and text are native and editable, and the sources slide lists the query behind every number.
+
+![Sample five-slide deck: title, KPIs, monthly churn trend, churn by segment, sources](docs/examples/sample-deck.png)
 
 The test users have fixed tokens: `alice-token`, `bob-token` and `carol-token`. You can also drive the API directly:
 

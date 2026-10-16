@@ -11,7 +11,8 @@ All notable changes are listed here. The format follows Keep a Changelog, and ve
   - SECURITY.md, CODE_OF_CONDUCT.md, and issue and PR templates;
   - README badges, a "what this is / is not" section and a self-contained design summary;
   - design context made self-contained: `docs/decisions.md` and `docs/test-plan.md`;
-  - Portkey model IDs marked as examples.
+  - Portkey model IDs marked as examples;
+  - fresh-clone quickstart and a sample output deck in `docs/examples/`.
 
 ## [0.1.0] - 2026-10-16
 
