@@ -2,7 +2,7 @@
 #   core     : Postgres (checkpoints + MLflow store), MLflow 3, Unity Catalog OSS, Portkey OSS gateway, RustFS (S3)
 #   app      : the agent API and the Streamlit UI in containers (`make api` / `make ui` run them natively instead)
 #   instabox : a lean set for a 4 vCPU / 8 GB cloud VM: Postgres, MLflow, Portkey, agent, UI (no UC, no S3, no Ollama)
-# Ollama runs natively on the Mac (Metal GPU), not in Docker. Every service has a healthcheck and memory limit.
+# Ollama runs natively on the Mac (Metal GPU), not in Docker. Every service has a memory limit; the instabox services have healthchecks.
 name: decksmith-local
 
 x-defaults: &defaults

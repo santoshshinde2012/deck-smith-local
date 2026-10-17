@@ -3,7 +3,7 @@ PY ?= .venv/bin/python
 COMPOSE ?= docker compose
 
 .DEFAULT_GOAL := help
-.PHONY: help quickstart quickstart-docker quickstart-offline e2e-usecase stop stop-native venv install lock up up-app up-instabox down logs ps seed publish test unit contract e2e e2e-stack eval lint type audit check api ui demo stack-test smoke-api docker-lint sbom clean
+.PHONY: help quickstart quickstart-docker quickstart-offline e2e-usecase stop stop-native venv install lock up up-app up-instabox down logs ps seed publish test unit contract e2e e2e-stack eval lint type audit check api ui demo stack-test smoke-api docker-lint sbom diagrams clean
 
 help: ## Show targets
 	@grep -E '^[a-z0-9-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -99,6 +99,9 @@ docker-lint: ## Hadolint the Dockerfiles
 
 sbom: ## CycloneDX SBOM of the Python environment into out/sbom.json
 	mkdir -p out && uvx --from cyclonedx-bom cyclonedx-py environment $(PY) -o out/sbom.json
+
+diagrams: ## Check the Mermaid palette and render every diagram in light and dark themes (needs mmdc or npx)
+	MMDC="$${MMDC:-$$(command -v mmdc || echo npx -y @mermaid-js/mermaid-cli@11)}" python3 scripts/diagrams.py
 
 eval: seed ## Golden set; add ARGS=--mlflow to log to MLflow
 	$(PY) -m decksmith.evaluation.harness $(ARGS)
