@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Project root: the checkout in development, DECKSMITH_HOME (/app) inside the container image.
@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     portkey_base_url: str = "http://localhost:8787"
     portkey_api_key: str = "local"
     portkey_config_dir: Path = ROOT / "configs" / "portkey"
+    llm_api_key: SecretStr = SecretStr("")  # your provider key for llm=portkey (never logged or stored)
     uc_oss_url: str = "http://localhost:8081"
     jwt_secret: str = ""
     env: str = "local"

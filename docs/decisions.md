@@ -86,7 +86,7 @@ Each record is short: the context, the decision, and the consequences.
 
 - **Context.** Contributors without a 16 GB Mac, and CI, need a real end-to-end run on a small VM.
 - **Decision.**
-  - The `instabox` Compose profile runs Postgres, MLflow, Portkey and the agent image, about 4 GB of memory limits in total; MLflow alone peaks around 1.6 GB at start-up. It leaves out Unity Catalog OSS, the object store and Ollama.
+  - The `instabox` Compose profile runs Postgres, MLflow, Portkey, the agent API and the UI, about 4.5 GB of memory limits in total; MLflow alone peaks around 1.6 GB at start-up. It leaves out Unity Catalog OSS, the object store and Ollama.
   - It uses the fake LLM by default. A remote model is opt-in through Portkey, with keys kept in the InstaBox vault.
   - `scripts/instabox/bootstrap.sh` runs headlessly and writes a Markdown summary and JUnit XML.
   - The same profile runs in CI (`stack-e2e`). A manual workflow provisions a real InstaBox VM, using the `INSTABOX_API_KEY` repo secret.

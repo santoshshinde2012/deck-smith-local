@@ -8,6 +8,72 @@ DeckSmith is an AI agent that builds PowerPoint decks from governed data. This r
 
 > All data is synthetic: seed 42, about 8,000 subscriptions. No real customer data is used anywhere.
 
+## Try it in 5 minutes
+
+You need Python 3.11+, `make` and git. [uv](https://docs.astral.sh/uv/) is recommended, because `make install` then installs the exact locked versions; without it, pip is used. Docker is optional.
+
+```bash
+git clone https://github.com/santoshshinde2012/deck-smith-local && cd deck-smith-local
+make quickstart        # install → seed → start API and UI → build decks; opens http://localhost:8501
+make e2e-usecase       # asserts the whole use case below and prints a pass/fail table
+make stop              # stop everything
+```
+
+`make quickstart` chooses the path for you; you can also pick one explicitly:
+
+| Path | Command | What runs | Needs |
+| --- | --- | --- | --- |
+| **Offline** | `make quickstart-offline` | Fake LLM, DuckDB and in-memory state. The API and UI run natively | Python only; no Docker, keys or network after install |
+| **Docker** | `make quickstart-docker` | Lean stack: Postgres checkpoints, MLflow traces (http://localhost:5001), the Portkey gateway, and the API and UI containers | Docker, about 4.5 GB of RAM |
+| **Real LLM** (optional) | Export the three variables below, then run either command | The same flow, with a hosted model routed through the Portkey OSS gateway | Your own provider key |
+
+```bash
+export DECKSMITH_LLM=portkey DECKSMITH_PORTKEY_CONFIG_DIR=configs/portkey-openai
+export DECKSMITH_LLM_API_KEY=sk-...   # yours, from your shell only; never put it in a file
+# Docker path: the gateway is already running on :8787. Offline path: run `npx @portkey-ai/gateway` first.
+```
+
+The agent puts the key into the gateway config in memory and sends it only to your local gateway, which calls the provider; it is never written to a file or logged ([configs/portkey-openai](configs/portkey-openai/README.md)). On the Docker path, the agent container gets it as an environment variable. Real models are not deterministic, so a run can fail QA and be retried. The fake LLM never fails.
+
+### The use case, step by step
+
+An analyst needs the quarterly churn review for the exec team, built from governed data and safe to present.
+
+1. **Ask.** Acting as **bob** in the UI (http://localhost:8501), the analyst asks: *"Build the Q3 2026 customer retention review for the exec team."*
+2. **Review the plan.** The agent proposes a five-slide outline: title, headline KPIs, monthly churn trend, churn by segment, and sources. The run pauses; no data has been touched yet. The analyst can **Edit** ("drop the segment slide"), **Reject** or **Approve**.
+3. **Approve.** Only now does the agent run approved SQL templates as bob. The LLM writes no SQL and no numbers.
+4. **Download.** The result is an editable `.pptx` with native charts. Every number on a slide is a *fact* with an ID (`f1`–`f5`). The renderer fills it in from the query result, and the **Sources** slide maps each fact ID to its query, tables and timestamp. The API returns the same facts, and the UI lists them under the download button.
+5. **Same request, different user.** Three test users show how permissions change the outcome:
+
+| User | Can see | Result |
+| --- | --- | --- |
+| **bob** | All regions | A full deck, with 6,172 active subscriptions |
+| **alice** | EU-West only | A full deck with her own numbers (2,184 active subscriptions) |
+| **carol** | Nothing | A clear refusal (`no_data`) and no deck |
+
+Users can't see each other's runs (404), and anonymous calls are rejected (401).
+
+`make e2e-usecase` checks each of these steps against the running API, with the same request and the same three users. It asserts that every number in the downloaded PPTX is a formatted fact, and writes `out/e2e-usecase.md`.
+
+<details><summary>Example output (offline path)</summary>
+
+```text
+1. API is up                                  PASS    API up at http://localhost:8000
+2. bob asks for a churn review deck           PASS    run 57e6c445: outline s01, s02, s03, s04, s05, paused for approval
+3. bob edits the outline (human in the loop)  PASS    edit applied (s01, s02, s03, s05); still waiting for approval
+4. bob approves; data is fetched as bob       PASS    status done: 5 slides, 5 facts
+5. bob downloads an editable PPTX             PASS    out/usecase-bob.pptx (54,215 bytes, 5 slides, 2 native charts)
+6. every number traces to a fact ID           PASS    4 numbers on slides, all from facts; sources slide cites 5 fact IDs
+7. alice (EU-West only) gets her own deck     PASS    run 39a25608: status done: 5 slides, 5 facts
+8. alice's deck is consistent too             PASS    4 numbers on slides, all from facts; sources slide cites 5 fact IDs
+9. permissions change the numbers             PASS    active subscriptions: bob 6,172 (all regions) vs alice 2,184 (EU-West only)
+10. carol (no access) is refused              PASS    no_data: None of the requested data is visible to you, so no deck was produced.
+11. runs are private; auth is required        PASS    alice cannot see bob's run or file (404); anonymous request rejected (401)
+
+11/11 steps passed
+```
+</details>
+
 ## What this is, and what it is not
 
 | This is | This is not |
@@ -94,23 +160,20 @@ What one request goes through. Run it yourself with `make up-instabox && make sm
 | [src/decksmith/sql/templates/](src/decksmith/sql/templates) | The approved SQL templates |
 | [evals/golden/golden.jsonl](evals/golden/golden.jsonl) | Ten golden prompts with expectations |
 
-## Quick start
+## Step by step (manual)
 
-Prerequisites: Python 3.11 or later, `make` and git. [uv](https://docs.astral.sh/uv/) is recommended, because `make install` then installs the exact locked versions; without uv it falls back to pip. Docker is needed only for the compose targets.
+The same as `make quickstart`, one target at a time:
 
 ```bash
-git clone https://github.com/santoshshinde2012/deck-smith-local && cd deck-smith-local
-git switch feat/e2e-best-practices # until pull requests #1 and #3 are merged (see "Branches")
-python3 -m venv .venv && make install
-make up            # optional: Postgres, MLflow, UC OSS, Portkey, RustFS (needs about 3 GB free Docker disk)
+make install       # locked install with uv (pip fallback)
 make seed          # data/lakehouse.duckdb, with per-user views for alice, bob and carol
-make test          # unit, architecture, integration and e2e tests (fake LLM)
+make test          # unit, contract, architecture, integration and e2e tests (fake LLM)
 make demo          # one deck each for bob (all regions), alice (EU-West) and carol (no access)
 make api           # http://localhost:8000/docs
 make ui            # http://localhost:8501 (in a second terminal)
 ```
 
-`make demo` works with or without `make up`. By default it uses the fake LLM, DuckDB and in-memory state. See [Local stack](#local-stack-apple-silicon-16-gb-or-more) to switch to the services.
+`make demo` works with or without Docker. By default it uses the fake LLM, DuckDB and in-memory state. See [Local stack](#local-stack-apple-silicon-16-gb-or-more) to switch to the services.
 
 ### Sample output
 
@@ -146,7 +209,7 @@ make stack-test    # E3 resume from Postgres, E6 gateway reachable
 
 | Service | Port | Stands in for |
 | --- | --- | --- |
-| Postgres 16 | 5433 | Lakebase (LangGraph checkpoints) and the MLflow store |
+| Postgres 18 | 5433 | Lakebase (LangGraph checkpoints) and the MLflow store |
 | MLflow 3 | 5001 | Managed MLflow (tracing, `genai.evaluate`) |
 | Unity Catalog OSS | 8081 | Unity Catalog names and registration (no row filters) |
 | Portkey OSS gateway | 8787 | Portkey Enterprise hybrid (inline configs) |
@@ -158,7 +221,7 @@ make stack-test    # E3 resume from Postgres, E6 gateway reachable
 ## Lean stack and InstaBox (8 GB)
 
 ```bash
-cp .env.instabox .env && make up-instabox   # Postgres, MLflow, Portkey, agent image (~4 GB limits)
+cp .env.instabox .env && make up-instabox   # Postgres, MLflow, Portkey, agent API and UI (~4.5 GB limits)
 make e2e-stack && make smoke-api            # E1–E8 on real Postgres, then curl drives the API
 ```
 
@@ -168,7 +231,9 @@ On a fresh [InstaBox](https://instabox.sh) VM, a single command runs everything 
 curl -fsSL https://raw.githubusercontent.com/santoshshinde2012/deck-smith-local/main/scripts/instabox/bootstrap.sh | bash
 ```
 
-Until #3 is merged, take the script from `feat/e2e-best-practices` and set `DECKSMITH_REF=feat/e2e-best-practices`.
+![bootstrap.sh on a fresh InstaBox VM](docs/evidence/instabox-bootstrap.gif)
+
+[docs/instabox.md](docs/instabox.md#evidence-from-a-real-run) has screenshots from that run: the UI, MLflow traces, the API docs and the rendered deck.
 
 ## What is tested where
 
@@ -199,15 +264,6 @@ src/decksmith/
   bootstrap.py   composition root
 tests/           unit, contract, architecture, integration, e2e
 ```
-
-## Branches and merge order
-
-The work lands in two stacked pull requests:
-
-1. **#1 `feat/core-local-stack` → `main`.** The agent, adapters, seed data, evals, compose stack and base CI.
-2. **#3 `feat/e2e-best-practices` → `feat/core-local-stack`.** Contract tests, a coverage gate, the error taxonomy and logging, the lock file and supply-chain checks, release automation, the devcontainer and InstaBox.
-
-Merge #1 first. Then change the base of #3 to `main` (GitHub may do this automatically when #1's branch is deleted) and merge #3. Until both are merged, `main` holds only a README that points here; use `feat/e2e-best-practices` for the latest code. #2 duplicates #3 and is not needed.
 
 ## Status and next steps
 

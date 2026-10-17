@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import jwt
@@ -138,3 +138,56 @@ def test_adapters_satisfy_ports() -> None:
     assert isinstance(UnityCatalogPassthrough(), Catalog) and isinstance(PerUserViewCatalog(lambda _: True), Catalog)
     assert isinstance(DatabricksSqlDataSource("https://x", "w"), DataSource)
     assert isinstance(PortkeyGateway("http://x", CONFIGS, client=object()), LLMGateway)
+
+
+def test_portkey_puts_users_key_only_into_targets_that_ask_for_it() -> None:
+    from decksmith.domain.errors import ConfigurationError
+
+    openai_dir = CONFIGS.parent / "portkey-openai"
+    gateway = PortkeyGateway("http://localhost:8787", openai_dir, provider_api_key="sk-test-not-real", client=object())
+    for header in gateway._configs.values():
+        assert [t["api_key"] for t in json.loads(header)["targets"]] == ["sk-test-not-real"]
+    assert "sk-test-not-real" not in (openai_dir / "pc-deck-small.json").read_text()
+    default = PortkeyGateway("http://localhost:8787", CONFIGS, provider_api_key="sk-test-not-real", client=object())
+    assert "sk-test-not-real" not in default._configs["small"]  # default targets don't ask for the key
+    with pytest.raises(ConfigurationError):
+        PortkeyGateway("http://localhost:8787", openai_dir, client=object())
+
+
+def test_settings_never_print_the_llm_key() -> None:
+    from decksmith.config import Settings
+
+    s = Settings(_env_file=None, llm_api_key="sk-test-not-real")
+    assert "sk-test-not-real" not in repr(s) and s.llm_api_key.get_secret_value() == "sk-test-not-real"
+
+
+def test_portkey_config_header_is_single_line_for_every_shipped_config() -> None:
+    for config_dir in sorted(CONFIGS.parent.glob("portkey*")):
+        gateway = PortkeyGateway("http://localhost:8787", config_dir, provider_api_key="k", client=object())
+        for header in gateway._configs.values():
+            assert "\n" not in header and json.loads(header)["targets"]
+
+
+def test_portkey_wraps_gateway_failures_without_leaking_detail() -> None:
+    import httpx
+    import openai
+
+    from decksmith.domain.errors import UpstreamError
+
+    def create(**_: Any) -> Any:
+        request = httpx.Request("POST", "http://localhost:8787/v1/chat/completions")
+        raise openai.AuthenticationError(
+            "Incorrect API key provided: sk-te***real",
+            response=cast(Any, httpx.Response(401, request=request)),  # openai types its own httpx fork
+            body=None,
+        )
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    gateway = PortkeyGateway("http://localhost:8787", CONFIGS, client=client)
+    with pytest.raises(UpstreamError) as info:
+        gateway.complete(
+            LLMRequest(
+                node="planner", tier="small", run_id="r1", user_hash="h", messages=(Message(role="user", content="hi"),)
+            )
+        )
+    assert "status 401" in str(info.value) and "sk-" not in str(info.value)

@@ -24,9 +24,9 @@ The full `core` profile (Unity Catalog OSS, RustFS, and Ollama on the Mac) doesn
 - Postgres;
 - MLflow;
 - Portkey;
-- the agent image (built from `docker/agent/Dockerfile`, running as a non-root user).
+- the agent API and the Streamlit UI, both from `docker/agent/Dockerfile` and both running as a non-root user.
 
-Its memory limits add up to about 4 GB; MLflow peaks around 1.6 GB while starting. `.env.instabox` selects:
+Its memory limits add up to about 4.5 GB; MLflow peaks around 1.6 GB while starting. `.env.instabox` selects:
 
 - the fake LLM;
 - DuckDB with per-user views;
@@ -64,8 +64,20 @@ Each `instabox exec` ends after a time limit, so the script runs in the backgrou
 5. Runs `make test`, the offline suite with the coverage gate.
 6. Runs `make e2e-stack`: the E1–E8 scenarios against real Postgres, with the live-service tests, writing `out/e2e-junit.xml`.
 7. Runs `make smoke-api`: curl drives the containerised agent. bob gets a deck, carol is refused, alice can't read bob's run, and an anonymous caller gets 401.
-8. Runs `make demo` with Postgres checkpoints and MLflow tracing.
+8. Runs `make demo` with Postgres checkpoints and MLflow tracing, then `make e2e-usecase`. That is the 11-step use case from the README, run against the containerised API.
 9. Writes `out/instabox-summary.md` (machine, versions, step timings, container memory) and prints it. The script exits non-zero if any step fails.
+
+## Open the UI from your browser
+
+The `instabox` profile includes the Streamlit UI on port 8501. Streamlit rejects WebSocket connections from an origin it doesn't know, and the InstaBox proxy forwards the public origin. Give the UI its public hostname, then publish the port:
+
+```bash
+instabox port publish <box> 8501 --json          # → https://8501-<id>.instabox.tech
+instabox exec <box> -- "cd /data/workspace/deck-smith-local && \
+  DECKSMITH_UI_PUBLIC_HOST=8501-<id>.instabox.tech docker compose --profile instabox up -d --wait ui"
+```
+
+Without that variable the page loads but stays blank: the container log shows "Rejecting WebSocket connection with disallowed Origin". The URL is public and the test users have fixed tokens, so run `instabox port unpublish <box> 8501` when you're done.
 
 ## From GitHub Actions
 
@@ -74,3 +86,30 @@ The workflow `instabox-e2e` (run manually) creates a VM, runs the bootstrap agai
 The workflow needs the repository secret `INSTABOX_API_KEY`, an API key with the `machines:*` scopes. Add it under **Settings → Secrets and variables → Actions**. It's never stored in the repo.
 
 The same lean profile also runs on every pull request on a GitHub runner, in the `stack-e2e` job of `ci`.
+
+## Evidence from a real run
+
+This was recorded on 17 Oct 2026 on a fresh InstaBox sandbox (4 vCPU, 8 GB), running `bootstrap.sh` on commit `e74e5f4`. Every step passed in 141 s:
+
+- offline tests: 91 passed, 3 skipped;
+- live-stack e2e: 17 tests, 0 failures, 3 skipped;
+- API smoke test and demo: ok.
+
+![Terminal recording of bootstrap.sh, played at 4x speed](evidence/instabox-bootstrap.gif)
+
+The full terminal session is in [`evidence/instabox-bootstrap.cast`](evidence/instabox-bootstrap.cast). Play it with `asciinema play docs/evidence/instabox-bootstrap.cast`.
+
+| Streamlit UI: bob's outline, waiting for approval | API docs (`/docs`) |
+| --- | --- |
+| ![Streamlit UI with a five-slide outline and Approve, Edit and Reject buttons](evidence/ui-outline.png) | ![FastAPI Swagger page listing the deck endpoints](evidence/api-docs.png) |
+| **MLflow 3: traces for the `decksmith-local` experiment** | **The generated deck, rendered with LibreOffice** |
+| ![MLflow traces list](evidence/mlflow-traces.png) | ![Five slides: title, KPIs, monthly churn trend, churn by segment, sources](evidence/deck-preview.png) |
+
+How these were made:
+
+- Playwright drove headless Chromium on the VM, against `localhost`.
+- `asciinema rec` recorded the terminal, `agg` turned it into the GIF, and LibreOffice and `pdftoppm` rendered the deck.
+
+`instabox port publish <box> 8000` also works. It gave a public `https://8000-<id>.instabox.tech` URL that answered `/healthz` (200), `/docs` (200) and an anonymous deck request (401). The URL is public and the test tokens are fixed, so unpublish it straight after use: `instabox port unpublish <box> 8000`.
+
+In this version each graph node is logged as its own short MLflow trace (for example `render`, about 43 ms), tagged with the `run_id`. They are not yet nested under a single trace per run.
