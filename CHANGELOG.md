@@ -20,6 +20,7 @@ All notable changes are listed here. The format follows Keep a Changelog, and ve
 
 ### Changed
 
+- CodeQL Action v3 → v4.39.0 (node24; v3 is deprecated in December 2026), pinned by SHA.
 - Every GitHub Action is pinned to a full commit SHA, with the version in a comment. This clears CodeQL `actions/unpinned-tag` (alerts 6, 24–26, 199–201, 368, 369).
 - Postgres 16 → 18. The data volume is now `pg18-data` and mounted at `/var/lib/postgresql`, because Postgres 18 keeps PGDATA in a versioned subdirectory. A local Postgres 16 volume (`pg-data`) is left untouched and unused; delete it with `docker volume rm decksmith-local_pg-data`.
 - GitHub Actions: checkout v7, setup-uv v7, upload-artifact v7, release-please-action v5.
@@ -33,6 +34,7 @@ All notable changes are listed here. The format follows Keep a Changelog, and ve
 
 ### Fixed
 
+- The agent and MLflow images no longer ship pip. On `python:3.13-slim`, pip 26.2.1 bundles msgpack 1.1.2, urllib3 2.7.0 and setuptools 70.3.0, which trivy fails as fixable HIGH (GHSA-6v7p-g79w-8964, CVE-2026-97687, CVE-2026-97689, CVE-2025-47273). The latest pip still bundles them, so upgrading doesn't help. The runtime never uses pip.
 - The Portkey adapter sends each config as one line; pretty-printed JSON was an illegal header value, so `DECKSMITH_LLM=portkey` failed before any call. Gateway failures now map to `upstream_unavailable` (503) instead of a bare 500, and the error text carries only the type and status.
 - The UI behind a reverse proxy, such as `instabox port publish`, stayed blank because Streamlit rejected the WebSocket origin. `DECKSMITH_UI_PUBLIC_HOST` fixes it.
 - The Postgres checkpointer uses a connection pool, so it is safe for threaded callers such as `mlflow.genai.evaluate`.

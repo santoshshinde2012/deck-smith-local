@@ -10,7 +10,11 @@ COPY src ./src
 RUN uv sync --locked --no-dev --extra ui --no-editable
 
 FROM python:3.13-slim AS runtime
-RUN groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid app --home-dir /app app
+# The runtime runs from /opt/venv and never needs pip. The base image's pip bundles its own copies of
+# msgpack, urllib3 and setuptools (pkg_resources), which trivy reports (e.g. GHSA-6v7p-g79w-8964,
+# CVE-2025-47273); even the latest pip still bundles them, so pip is removed rather than upgraded.
+RUN python -m pip uninstall --yes --no-cache-dir pip \
+ && groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid app --home-dir /app app
 ENV DECKSMITH_HOME=/app PATH=/opt/venv/bin:$PATH PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /app
 COPY --from=build /opt/venv /opt/venv
