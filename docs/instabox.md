@@ -67,6 +67,18 @@ Each `instabox exec` ends after a time limit, so the script runs in the backgrou
 8. Runs `make demo` with Postgres checkpoints and MLflow tracing, then `make e2e-usecase`. That is the 11-step use case from the README, run against the containerised API.
 9. Writes `out/instabox-summary.md` (machine, versions, step timings, container memory) and prints it. The script exits non-zero if any step fails.
 
+## Open the UI from your browser
+
+The `instabox` profile includes the Streamlit UI on port 8501. Streamlit rejects WebSocket connections from an origin it doesn't know, and the InstaBox proxy forwards the public origin. Give the UI its public hostname, then publish the port:
+
+```bash
+instabox port publish <box> 8501 --json          # → https://8501-<id>.instabox.tech
+instabox exec <box> -- "cd /data/workspace/deck-smith-local && \
+  DECKSMITH_UI_PUBLIC_HOST=8501-<id>.instabox.tech docker compose --profile instabox up -d --wait ui"
+```
+
+Without that variable the page loads but stays blank: the container log shows "Rejecting WebSocket connection with disallowed Origin". The URL is public and the test users have fixed tokens, so run `instabox port unpublish <box> 8501` when you're done.
+
 ## From GitHub Actions
 
 The workflow `instabox-e2e` (run manually) creates a VM, runs the bootstrap against a ref, adds the summary to the job summary, and always deletes the VM. The VM's own timeout deletes it too, if the job dies.

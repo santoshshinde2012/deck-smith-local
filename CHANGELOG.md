@@ -32,6 +32,8 @@ All notable changes are listed here. The format follows Keep a Changelog, and ve
 
 ### Fixed
 
+- The Portkey adapter sends each config as one line; pretty-printed JSON was an illegal header value, so `DECKSMITH_LLM=portkey` failed before any call. Gateway failures now map to `upstream_unavailable` (503) instead of a bare 500, and the error text carries only the type and status.
+- The UI behind a reverse proxy, such as `instabox port publish`, stayed blank because Streamlit rejected the WebSocket origin. `DECKSMITH_UI_PUBLIC_HOST` fixes it.
 - The Postgres checkpointer uses a connection pool, so it is safe for threaded callers such as `mlflow.genai.evaluate`.
 - MLflow gets 2 GiB and one worker; it was killed for running out of memory at 1 GiB on 8 GB VMs.
 - The containerised agent writes decks to a named volume, because a bind mount was not writable by the non-root user on Linux.

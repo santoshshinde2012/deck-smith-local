@@ -124,7 +124,11 @@ services:
     profiles: ["app", "instabox"]
     build: { context: ., dockerfile: docker/agent/Dockerfile }
     command: ["streamlit", "run", "ui.py", "--server.port=8501", "--server.address=0.0.0.0"]
-    environment: { DECKSMITH_API_URL: "http://agent:8000" }
+    environment:
+      DECKSMITH_API_URL: http://agent:8000
+      # Behind a reverse proxy (e.g. `instabox port publish`), Streamlit rejects the WebSocket unless the
+      # browser's host is known: set DECKSMITH_UI_PUBLIC_HOST=<public hostname> (see docs/instabox.md).
+      STREAMLIT_BROWSER_SERVER_ADDRESS: ${DECKSMITH_UI_PUBLIC_HOST:-localhost}
     ports: ["8501:8501"]
     depends_on:
       agent: { condition: service_healthy }

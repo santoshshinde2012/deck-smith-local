@@ -29,11 +29,11 @@ make stop              # stop everything
 
 ```bash
 export DECKSMITH_LLM=portkey DECKSMITH_PORTKEY_CONFIG_DIR=configs/portkey-openai
-export DECKSMITH_LLM_API_KEY=sk-...   # yours; it stays in your environment and is never written to disk
+export DECKSMITH_LLM_API_KEY=sk-...   # yours, from your shell only; never put it in a file
 # Docker path: the gateway is already running on :8787. Offline path: run `npx @portkey-ai/gateway` first.
 ```
 
-The key travels only as the bearer token from the agent to your local gateway, and from there to the provider ([configs/portkey-openai](configs/portkey-openai/README.md)). Real models are not deterministic, so a run can fail QA and be retried. The fake LLM never fails.
+The agent puts the key into the gateway config in memory and sends it only to your local gateway, which calls the provider; it is never written to a file or logged ([configs/portkey-openai](configs/portkey-openai/README.md)). On the Docker path, the agent container gets it as an environment variable. Real models are not deterministic, so a run can fail QA and be retried. The fake LLM never fails.
 
 ### The use case, step by step
 
