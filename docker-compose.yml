@@ -16,7 +16,7 @@ services:
   postgres:
     <<: *defaults
     profiles: ["core", "instabox"]
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: decksmith
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-decksmith}
