@@ -28,3 +28,15 @@ make install && make seed
 - **Decisions.** Record any new architectural decision as an ADR in `docs/decisions.md`, giving its context, decision and consequences.
 
 You can also open the repo in the devcontainer (`.devcontainer/`), which runs the same setup automatically.
+
+## Releases and repository settings
+
+release-please opens the release PR (version bump and CHANGELOG) when `main` changes. It needs one repository setting, which only a maintainer can switch on:
+
+- **Settings → Actions → General → Workflow permissions:** enable **"Allow GitHub Actions to create and approve pull requests"**. Nothing else needs changing: the workflow's own `permissions:` block grants the `contents` and `pull-requests` write access it needs.
+
+Without it, the `release` workflow fails with "GitHub Actions is not permitted to create or approve pull requests".
+
+The manual `instabox-e2e` workflow also needs the repository secret `INSTABOX_API_KEY` (see [docs/instabox.md](docs/instabox.md)).
+
+Dependabot opens at most one grouped PR per ecosystem per month (`.github/dependabot.yml`). Python 3.14 base images are ignored for now; the reason is in that file and in the CHANGELOG.

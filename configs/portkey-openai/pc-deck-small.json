@@ -1,0 +1,6 @@
+{
+  "strategy": { "mode": "fallback", "on_status_codes": [429, 500, 502, 503, 504] },
+  "retry": { "attempts": 2, "on_status_codes": [429, 503] },
+  "request_timeout": 60000,
+  "targets": [{ "provider": "openai", "override_params": { "model": "gpt-4o-mini" } }]
+}

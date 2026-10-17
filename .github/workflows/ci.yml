@@ -11,8 +11,8 @@ jobs:
     strategy:
       matrix: { python: ["3.11", "3.12", "3.13"] }
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with: { python-version: "${{ matrix.python }}", enable-cache: true }
       - name: install (locked)
         run: uv sync --locked --all-extras
@@ -26,14 +26,14 @@ jobs:
         run: uv run python -m decksmith.seed.generate && uv run python -m decksmith.evaluation.harness
       - name: dependency audit
         run: uv export --frozen --all-extras --no-emit-project --no-hashes -o "$RUNNER_TEMP/req.txt" && uv run pip-audit --strict --progress-spinner off --disable-pip --no-deps -r "$RUNNER_TEMP/req.txt"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.python == '3.12'
         with: { name: coverage, path: coverage.xml }
 
   compose:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: validate docker-compose.yml (all profiles)
         run: docker compose --profile core --profile app --profile instabox config --quiet
 
@@ -42,8 +42,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with: { python-version: "3.12", enable-cache: true }
       - run: uv sync --locked --all-extras && cp .env.instabox .env
       - run: make seed PY=.venv/bin/python
@@ -51,8 +51,25 @@ jobs:
       - run: make e2e-stack PY=.venv/bin/python
       - run: make smoke-api
       - run: make demo PY=.venv/bin/python
+      - name: use case end to end (containerised API and UI)
+        run: make e2e-usecase PY=.venv/bin/python && curl -fsS http://localhost:8501/_stcore/health
       - if: failure()
         run: docker compose --profile instabox logs --tail 200
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
-        with: { name: stack-e2e, path: "out/*.xml" }
+        with: { name: stack-e2e, path: "out/*.xml\nout/*.md" }
+
+  quickstart-offline:
+    # What a newcomer runs first: no Docker, fake LLM, DuckDB; then the scripted use case.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with: { python-version: "3.12", enable-cache: true }
+      - run: make quickstart-offline
+      - run: make e2e-usecase
+      - run: make stop
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with: { name: quickstart-offline, path: "out/e2e-usecase.md\nout/usecase-*.pptx\nout/logs/" }

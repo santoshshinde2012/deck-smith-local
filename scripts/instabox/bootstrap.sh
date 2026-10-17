@@ -99,6 +99,7 @@ summary() {
     echo '```text'
     ${DOCKER:-docker} stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.CPUPerc}}' 2>/dev/null || true
     echo '```'
+    [ -f out/e2e-usecase.md ] && { echo; sed -n '3p' out/e2e-usecase.md | sed 's/^/Use case: /'; }
     [ -f out/e2e-junit.xml ] && python3 - <<'PY'
 import xml.etree.ElementTree as ET
 s = ET.parse("out/e2e-junit.xml").getroot()
@@ -120,4 +121,5 @@ step "offline tests + coverage gate" make test
 step "live-stack e2e" make e2e-stack
 step "API smoke (containerised agent)" make smoke-api
 step "demo (Postgres + MLflow)" make demo
+step "use case (make e2e-usecase)" make e2e-usecase
 summary

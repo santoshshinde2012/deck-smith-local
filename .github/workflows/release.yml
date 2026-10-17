@@ -13,7 +13,7 @@ jobs:
       tag: ${{ steps.rp.outputs.tag_name }}
     steps:
       - id: rp
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
         with: { config-file: release-please-config.json, manifest-file: .release-please-manifest.json }
 
   publish-artifacts:
@@ -21,8 +21,8 @@ jobs:
     if: needs.release-please.outputs.released == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
       - run: uv build
       - run: uv sync --locked --no-dev && uvx --from cyclonedx-bom cyclonedx-py environment .venv/bin/python -o dist/sbom.cdx.json
       - env: { GH_TOKEN: "${{ github.token }}" }

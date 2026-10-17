@@ -1,7 +1,7 @@
 # DeckSmith local stack. Profiles:
 #   core     : Postgres (checkpoints + MLflow store), MLflow 3, Unity Catalog OSS, Portkey OSS gateway, RustFS (S3)
 #   app      : the agent API and the Streamlit UI in containers (`make api` / `make ui` run them natively instead)
-#   instabox : a lean set for a 4 vCPU / 8 GB cloud VM: Postgres, MLflow, Portkey, agent (no UC, no S3, no Ollama)
+#   instabox : a lean set for a 4 vCPU / 8 GB cloud VM: Postgres, MLflow, Portkey, agent, UI (no UC, no S3, no Ollama)
 # Ollama runs natively on the Mac (Metal GPU), not in Docker. Every service has a healthcheck and memory limit.
 name: decksmith-local
 
@@ -16,14 +16,16 @@ services:
   postgres:
     <<: *defaults
     profiles: ["core", "instabox"]
-    image: postgres:16-alpine
+    # Postgres 18 keeps PGDATA in a versioned subdirectory (/var/lib/postgresql/18/docker), so the volume
+    # mounts the parent directory. New volume name: a Postgres 16 volume cannot be opened by 18.
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: decksmith
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-decksmith}
       POSTGRES_DB: decksmith
     ports: ["5433:5432"]
     volumes:
-      - pg-data:/var/lib/postgresql/data
+      - pg18-data:/var/lib/postgresql
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U decksmith -d decksmith"]
@@ -105,6 +107,10 @@ services:
       DECKSMITH_UC_OSS_URL: http://unitycatalog:8080
       DECKSMITH_DUCKDB_PATH: /app/data/lakehouse.duckdb
       DECKSMITH_OUTPUT_DIR: /app/out
+      # Optional real-LLM path: taken from your shell (or .env); fake by default. See configs/portkey-openai.
+      DECKSMITH_LLM: ${DECKSMITH_LLM:-fake}
+      DECKSMITH_PORTKEY_CONFIG_DIR: ${DECKSMITH_PORTKEY_CONFIG_DIR:-configs/portkey}
+      DECKSMITH_LLM_API_KEY: ${DECKSMITH_LLM_API_KEY:-}
     ports: ["8000:8000"]
     volumes: ["./data:/app/data:ro", "agent-out:/app/out"]  # named volume so the non-root uid can write on Linux
     depends_on:
@@ -115,7 +121,7 @@ services:
 
   ui:
     <<: *defaults
-    profiles: ["app"]
+    profiles: ["app", "instabox"]
     build: { context: ., dockerfile: docker/agent/Dockerfile }
     command: ["streamlit", "run", "ui.py", "--server.port=8501", "--server.address=0.0.0.0"]
     environment: { DECKSMITH_API_URL: "http://agent:8000" }
@@ -131,7 +137,7 @@ services:
     cpus: 0.5
 
 volumes:
-  pg-data:
+  pg18-data:
   mlflow-artifacts:
   object-data:
   agent-out:

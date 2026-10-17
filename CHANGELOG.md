@@ -13,12 +13,22 @@ All notable changes are listed here. The format follows Keep a Changelog, and ve
 - Non-root multi-stage images, plus healthchecks and resource limits in Compose.
 - The `instabox` lean profile, `scripts/instabox/bootstrap.sh`, `scripts/smoke_api.sh`, the `instabox-e2e` workflow and the `stack-e2e` CI job.
 - A devcontainer, ADRs D9–D14, and a README walkthrough and architecture diagram.
+- "Try it in 5 minutes": `make quickstart` (Docker or offline; an optional real LLM through the Portkey gateway with your own `DECKSMITH_LLM_API_KEY`), `make e2e-usecase` (the 11-step use case, with a pass/fail table) and `make stop`.
+- The Streamlit UI joins the `instabox` profile; CI gains a `quickstart-offline` job, and `stack-e2e` runs the use case.
+- `configs/portkey-openai/`: example configs for a hosted provider, using the user's own key.
 - InstaBox run evidence in `docs/evidence/`: an asciinema recording, a GIF, and screenshots of the UI, MLflow, the API docs and the deck.
 
 ### Changed
 
+- Postgres 16 → 18. The data volume is now `pg18-data` and mounted at `/var/lib/postgresql`, because Postgres 18 keeps PGDATA in a versioned subdirectory. A local Postgres 16 volume (`pg-data`) is left untouched and unused; delete it with `docker volume rm decksmith-local_pg-data`.
+- GitHub Actions: checkout v7, setup-uv v7, upload-artifact v7, release-please-action v5.
+- Dependabot opens one grouped PR per ecosystem per month.
 - mypy now checks `tests` as well as `src`, using the pydantic plugin.
 - `decksmith.__version__` and the API version are read from the package metadata, so `pyproject.toml` is the single source.
+
+### Deferred
+
+- Python 3.14 base images (#5, #7). The MLflow image does not build: the pinned `psycopg2-binary` 2.9.10 has no 3.14 wheel. trivy also fails the 3.14 agent image on a fixable HIGH (msgpack 1.1.2, GHSA-6v7p-g79w-8964). Dependabot ignores `python >= 3.14` until the pins and the CI matrix move.
 
 ### Fixed
 

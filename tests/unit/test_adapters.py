@@ -138,3 +138,19 @@ def test_adapters_satisfy_ports() -> None:
     assert isinstance(UnityCatalogPassthrough(), Catalog) and isinstance(PerUserViewCatalog(lambda _: True), Catalog)
     assert isinstance(DatabricksSqlDataSource("https://x", "w"), DataSource)
     assert isinstance(PortkeyGateway("http://x", CONFIGS, client=object()), LLMGateway)
+
+
+def test_portkey_forwards_users_provider_key_as_bearer() -> None:
+    """The user's own provider key travels as the bearer token; without one a placeholder is sent."""
+    with_key = PortkeyGateway("http://localhost:8787", CONFIGS, provider_api_key="sk-test-not-real")
+    without = PortkeyGateway("http://localhost:8787", CONFIGS)
+    assert with_key._client.api_key == "sk-test-not-real"
+    assert without._client.api_key == "unused"
+    assert with_key._client.default_headers["x-portkey-api-key"] == "local"
+
+
+def test_settings_never_print_the_llm_key() -> None:
+    from decksmith.config import Settings
+
+    s = Settings(_env_file=None, llm_api_key="sk-test-not-real")
+    assert "sk-test-not-real" not in repr(s) and s.llm_api_key.get_secret_value() == "sk-test-not-real"

@@ -3,10 +3,28 @@ PY ?= .venv/bin/python
 COMPOSE ?= docker compose
 
 .DEFAULT_GOAL := help
-.PHONY: help venv install lock up up-app up-instabox down logs ps seed publish test unit contract e2e e2e-stack eval lint type audit check api ui demo stack-test smoke-api docker-lint sbom clean
+.PHONY: help quickstart quickstart-docker quickstart-offline e2e-usecase stop stop-native venv install lock up up-app up-instabox down logs ps seed publish test unit contract e2e e2e-stack eval lint type audit check api ui demo stack-test smoke-api docker-lint sbom clean
 
 help: ## Show targets
 	@grep -E '^[a-z0-9-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-12s %s\n", $$1, $$2}'
+
+quickstart: ## Try it: install, seed, start API + UI, build decks (Docker if available, else offline)
+	scripts/quickstart.sh auto
+
+quickstart-docker: ## Quickstart on the lean Docker stack (Postgres, MLflow, Portkey, API and UI containers)
+	scripts/quickstart.sh docker
+
+quickstart-offline: ## Quickstart with no Docker: fake LLM, DuckDB, in-memory state; API and UI run natively
+	scripts/quickstart.sh offline
+
+e2e-usecase: ## Assert the whole use case against the running API and print a pass/fail table
+	$(PY) scripts/e2e_usecase.py --api $(or $(API),http://localhost:8000)
+
+stop: stop-native ## Stop the quickstart (native processes and containers)
+	@if docker info >/dev/null 2>&1; then $(COMPOSE) --profile core --profile app --profile instabox down; fi
+
+stop-native:
+	@if [ -f out/.quickstart.pids ]; then kill $$(cat out/.quickstart.pids) 2>/dev/null || true; rm -f out/.quickstart.pids; fi
 
 venv: ## Create .venv
 	python3 -m venv .venv

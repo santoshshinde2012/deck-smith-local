@@ -232,7 +232,7 @@ Tests use the same root and override only what they need. For example, `build_co
 | --- | --- | --- |
 | UC row filters by region | One view per user and table (`v_<table>__<user>`). No view means `AccessDenied`. | Same results for the three test users. The emulation is not a security boundary [A]. |
 | Apps OBO token | Static bearer tokens (`alice-token`, and so on) or HS256 JWTs | Same `Principal` shape. Real OBO is scenario E10, tier L3. |
-| Lakebase checkpoints | Postgres 16 with LangGraph `PostgresSaver` | Same saver. |
+| Lakebase checkpoints | Postgres 18 with LangGraph `PostgresSaver` | Same saver. |
 | Managed MLflow | MLflow 3 OSS server with a Postgres store | Same tracing and `genai.evaluate` APIs. |
 | Portkey Enterprise hybrid | Portkey OSS gateway; configs sent inline in `x-portkey-config` | No stored configs, budgets or virtual keys locally. The 446 guardrail is emulated in code. |
 | Databricks SQL warehouse | DuckDB with sqlglot transpiling Databricks SQL | Parity is scenario E9, tier L3, and has not been verified yet. |

@@ -44,7 +44,13 @@ def _fake_llm(_: Settings) -> LLMGateway:
 def _portkey(s: Settings) -> LLMGateway:
     from decksmith.adapters.local.portkey_gateway import PortkeyGateway
 
-    return PortkeyGateway(s.portkey_base_url, s.portkey_config_dir, s.portkey_api_key, env=s.env)
+    return PortkeyGateway(
+        s.portkey_base_url,
+        s.portkey_config_dir,
+        s.portkey_api_key,
+        env=s.env,
+        provider_api_key=s.llm_api_key.get_secret_value(),
+    )
 
 
 def _duckdb(s: Settings) -> DataSource:

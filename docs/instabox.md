@@ -24,9 +24,9 @@ The full `core` profile (Unity Catalog OSS, RustFS, and Ollama on the Mac) doesn
 - Postgres;
 - MLflow;
 - Portkey;
-- the agent image (built from `docker/agent/Dockerfile`, running as a non-root user).
+- the agent API and the Streamlit UI, both from `docker/agent/Dockerfile` and both running as a non-root user.
 
-Its memory limits add up to about 4 GB; MLflow peaks around 1.6 GB while starting. `.env.instabox` selects:
+Its memory limits add up to about 4.5 GB; MLflow peaks around 1.6 GB while starting. `.env.instabox` selects:
 
 - the fake LLM;
 - DuckDB with per-user views;
@@ -64,7 +64,7 @@ Each `instabox exec` ends after a time limit, so the script runs in the backgrou
 5. Runs `make test`, the offline suite with the coverage gate.
 6. Runs `make e2e-stack`: the E1–E8 scenarios against real Postgres, with the live-service tests, writing `out/e2e-junit.xml`.
 7. Runs `make smoke-api`: curl drives the containerised agent. bob gets a deck, carol is refused, alice can't read bob's run, and an anonymous caller gets 401.
-8. Runs `make demo` with Postgres checkpoints and MLflow tracing.
+8. Runs `make demo` with Postgres checkpoints and MLflow tracing, then `make e2e-usecase`. That is the 11-step use case from the README, run against the containerised API.
 9. Writes `out/instabox-summary.md` (machine, versions, step timings, container memory) and prints it. The script exits non-zero if any step fails.
 
 ## From GitHub Actions

@@ -24,13 +24,18 @@ class PortkeyGateway:
         app: str = "decksmith",
         env: str = "local",
         client: Any = None,
+        provider_api_key: str = "",
     ) -> None:
         self._configs: dict[Tier, str] = {
             "small": (config_dir / "pc-deck-small.json").read_text(),
             "strong": (config_dir / "pc-deck-strong.json").read_text(),
         }
         self._client: Any = client or OpenAI(
-            api_key="unused", base_url=base_url.rstrip("/") + "/v1", default_headers={"x-portkey-api-key": api_key}
+            # The OSS gateway forwards the bearer token to the provider when a config target has no
+            # key of its own, so a user's own provider key (e.g. OpenAI) never lands in a file.
+            api_key=provider_api_key or "unused",
+            base_url=base_url.rstrip("/") + "/v1",
+            default_headers={"x-portkey-api-key": api_key},
         )
         self._app, self._env = app, env
 
