@@ -54,8 +54,8 @@ DECKSMITH_LOG_LEVEL=WARNING .venv/bin/python scripts/demo.py | tee "$OUT/logs/de
 
 say "Done"
 echo "Generated decks (editable PowerPoint):"
-# shellcheck disable=SC2012  # plain file names we generate; newest first
-ls -1t "$OUT"/*.pptx 2>/dev/null | head -5 | sed 's/^/  /'
+# This run's decks only, labelled by user (from the demo log).
+awk -v root="$PWD/" '/^[a-z]+: outline/ {u=$1} /\.pptx/ {for (i=1;i<=NF;i++) if ($i ~ /\.pptx$/) {p=$i; if (index(p,root)==1) p=substr(p,length(root)+1); printf "  %-7s %s\n", u, p}}' "$OUT/logs/demo.log"
 cat <<MSG
 
   UI       http://localhost:8501   act as bob, then Draft outline → Approve → Download deck
