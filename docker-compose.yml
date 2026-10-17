@@ -1,0 +1,137 @@
+# DeckSmith local stack. Profiles:
+#   core     : Postgres (checkpoints + MLflow store), MLflow 3, Unity Catalog OSS, Portkey OSS gateway, RustFS (S3)
+#   app      : the agent API and the Streamlit UI in containers (`make api` / `make ui` run them natively instead)
+#   instabox : a lean set for a 4 vCPU / 8 GB cloud VM: Postgres, MLflow, Portkey, agent (no UC, no S3, no Ollama)
+# Ollama runs natively on the Mac (Metal GPU), not in Docker. Every service has a healthcheck and memory limit.
+name: decksmith-local
+
+x-defaults: &defaults
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  postgres:
+    <<: *defaults
+    profiles: ["core", "instabox"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: decksmith
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-decksmith}
+      POSTGRES_DB: decksmith
+    ports: ["5433:5432"]
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U decksmith -d decksmith"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 512m
+    cpus: 1.0
+
+  mlflow:
+    <<: *defaults
+    profiles: ["core", "instabox"]
+    build: ./docker/mlflow
+    command: >
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri postgresql+psycopg2://decksmith:${POSTGRES_PASSWORD:-decksmith}@postgres:5432/mlflow
+      --artifacts-destination /mlartifacts --serve-artifacts
+      --allowed-hosts "localhost,localhost:5001,127.0.0.1,127.0.0.1:5001,mlflow,mlflow:5000" --workers 1
+    ports: ["5001:5000"]          # 5000 is taken by AirPlay Receiver on macOS
+    volumes: [mlflow-artifacts:/mlartifacts]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 18
+      start_period: 20s
+    mem_limit: 2g   # startup (migrations + job executor) peaks above 1 GiB; OOM-killed at 1g on InstaBox
+    cpus: 1.0
+
+  unitycatalog:
+    <<: *defaults
+    profiles: ["core"]
+    image: unitycatalog/unitycatalog:v0.7.0
+    ports: ["8081:8080"]          # host 8080 is kept for Airflow in a later profile
+    mem_limit: 1536m
+    cpus: 1.0
+
+  portkey:
+    <<: *defaults
+    profiles: ["core", "instabox"]
+    image: portkeyai/gateway:1.15.2
+    ports: ["8787:8787"]
+    extra_hosts: ["host.docker.internal:host-gateway"]   # reach native Ollama on the Mac
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8787/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    mem_limit: 512m
+    cpus: 0.5
+
+  objectstore:
+    <<: *defaults
+    profiles: ["core"]
+    image: rustfs/rustfs:1.0.2
+    environment:
+      RUSTFS_ACCESS_KEY: ${OBJECT_STORE_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${OBJECT_STORE_SECRET_KEY:-rustfsadmin}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [object-data:/data]
+    mem_limit: 512m
+    cpus: 0.5
+
+  agent:
+    <<: *defaults
+    profiles: ["app", "instabox"]
+    build: { context: ., dockerfile: docker/agent/Dockerfile }
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DECKSMITH_STATE_STORE: postgres
+      DECKSMITH_TRACER: mlflow
+      DECKSMITH_POSTGRES_DSN: postgresql://decksmith:${POSTGRES_PASSWORD:-decksmith}@postgres:5432/decksmith
+      DECKSMITH_MLFLOW_TRACKING_URI: http://mlflow:5000
+      DECKSMITH_PORTKEY_BASE_URL: http://portkey:8787
+      DECKSMITH_UC_OSS_URL: http://unitycatalog:8080
+      DECKSMITH_DUCKDB_PATH: /app/data/lakehouse.duckdb
+      DECKSMITH_OUTPUT_DIR: /app/out
+    ports: ["8000:8000"]
+    volumes: ["./data:/app/data:ro", "agent-out:/app/out"]  # named volume so the non-root uid can write on Linux
+    depends_on:
+      postgres: { condition: service_healthy }
+      mlflow: { condition: service_healthy }
+    mem_limit: 1g
+    cpus: 1.0
+
+  ui:
+    <<: *defaults
+    profiles: ["app"]
+    build: { context: ., dockerfile: docker/agent/Dockerfile }
+    command: ["streamlit", "run", "ui.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    environment: { DECKSMITH_API_URL: "http://agent:8000" }
+    ports: ["8501:8501"]
+    depends_on:
+      agent: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+    mem_limit: 512m
+    cpus: 0.5
+
+volumes:
+  pg-data:
+  mlflow-artifacts:
+  object-data:
+  agent-out:

@@ -1,0 +1,9 @@
+{
+  "strategy": { "mode": "fallback", "on_status_codes": [429, 500, 502, 503, 504] },
+  "retry": { "attempts": 2, "on_status_codes": [429, 503] },
+  "request_timeout": 30000,
+  "targets": [
+    { "provider": "ollama", "custom_host": "http://host.docker.internal:11434", "override_params": { "model": "llama3.1:8b" } },
+    { "provider": "bedrock", "aws_region": "eu-central-1", "override_params": { "model": "eu.anthropic.claude-haiku-4-5-20251001-v1:0" } }
+  ]
+}

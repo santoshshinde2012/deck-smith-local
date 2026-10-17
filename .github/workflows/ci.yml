@@ -1,0 +1,58 @@
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+permissions: { contents: read }
+concurrency: { group: "ci-${{ github.ref }}", cancel-in-progress: true }
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: { python: ["3.11", "3.12", "3.13"] }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: { python-version: "${{ matrix.python }}", enable-cache: true }
+      - name: install (locked)
+        run: uv sync --locked --all-extras
+      - name: ruff
+        run: uv run ruff check src tests scripts && uv run ruff format --check src tests scripts
+      - name: mypy
+        run: uv run mypy
+      - name: tests with coverage gate (unit, contract, architecture, integration, e2e E1-E8)
+        run: uv run pytest -rs
+      - name: golden set
+        run: uv run python -m decksmith.seed.generate && uv run python -m decksmith.evaluation.harness
+      - name: dependency audit
+        run: uv export --frozen --all-extras --no-emit-project --no-hashes -o "$RUNNER_TEMP/req.txt" && uv run pip-audit --strict --progress-spinner off --disable-pip --no-deps -r "$RUNNER_TEMP/req.txt"
+      - uses: actions/upload-artifact@v4
+        if: matrix.python == '3.12'
+        with: { name: coverage, path: coverage.xml }
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: validate docker-compose.yml (all profiles)
+        run: docker compose --profile core --profile app --profile instabox config --quiet
+
+  stack-e2e:
+    # The same lean profile InstaBox uses, on a GitHub runner: real Postgres, MLflow, Portkey, agent image.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: { python-version: "3.12", enable-cache: true }
+      - run: uv sync --locked --all-extras && cp .env.instabox .env
+      - run: make seed PY=.venv/bin/python
+      - run: make up-instabox
+      - run: make e2e-stack PY=.venv/bin/python
+      - run: make smoke-api
+      - run: make demo PY=.venv/bin/python
+      - if: failure()
+        run: docker compose --profile instabox logs --tail 200
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: stack-e2e, path: "out/*.xml" }

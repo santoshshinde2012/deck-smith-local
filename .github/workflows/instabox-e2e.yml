@@ -1,0 +1,44 @@
+name: instabox-e2e
+# Manual: provision a fresh InstaBox VM (4 vCPU / 8 GB), run scripts/instabox/bootstrap.sh against a
+# git ref, print the summary, and always delete the VM. Needs the repo secret INSTABOX_API_KEY
+# (an InstaBox API key with machines:read, machines:write, machines:delete); nothing else.
+on:
+  workflow_dispatch:
+    inputs:
+      ref: { description: "Git ref to test", required: true, default: main }
+permissions: { contents: read }
+concurrency: { group: instabox-e2e, cancel-in-progress: false }
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      INSTABOX_API_KEY: ${{ secrets.INSTABOX_API_KEY }}
+      INSTABOX_NO_TELEMETRY: "1"
+      BOX: gh-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ inputs.ref }}" }
+      - name: check secret
+        run: test -n "$INSTABOX_API_KEY" || { echo "::error::INSTABOX_API_KEY secret is not set"; exit 1; }
+      - name: install CLI
+        run: curl -fsSL https://api.instabox.sh/install.sh | INSTABOX_INSTALL_DIR="$HOME/.local/bin" sh && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: create VM (auto-deleted after 70 minutes even if this job dies)
+        run: instabox create --name "$BOX" --template universal --auto-suspend 0 --timeout 70m --on-timeout kill
+      - name: start bootstrap in the background
+        env: { REF: "${{ inputs.ref }}" }
+        run: |
+          instabox exec "$BOX" --timeout 60 -- "mkdir -p ~/logs && curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/scripts/instabox/bootstrap.sh -o ~/bootstrap.sh && chmod +x ~/bootstrap.sh && (DECKSMITH_REF='${REF}' setsid nohup bash -c '~/bootstrap.sh; echo \$? > ~/logs/exit' > ~/logs/run.log 2>&1 < /dev/null &)"
+      - name: wait for completion (each exec is short; the run itself continues on the VM)
+        run: |
+          for _ in $(seq 1 110); do
+            if instabox exec "$BOX" --timeout 30 -- "test -f ~/logs/exit"; then break; fi
+            sleep 30
+          done
+          instabox exec "$BOX" --timeout 60 -- "tail -n 60 ~/logs/run.log"
+          code=$(instabox exec "$BOX" --timeout 30 -- "cat ~/logs/exit 2>/dev/null || echo 124")
+          instabox exec "$BOX" --timeout 30 -- "cat /data/workspace/deck-smith-local/out/instabox-summary.md" >> "$GITHUB_STEP_SUMMARY" || true
+          test "$code" = "0"
+      - name: delete VM
+        if: always()
+        run: instabox rm "$BOX" || true
