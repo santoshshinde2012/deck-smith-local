@@ -39,4 +39,6 @@ Without it, the `release` workflow fails with "GitHub Actions is not permitted t
 
 The manual `instabox-e2e` workflow also needs the repository secret `INSTABOX_API_KEY` (see [docs/instabox.md](docs/instabox.md)).
 
+Every action in `.github/workflows/` is pinned to a full commit SHA, with the release in a trailing comment (`uses: owner/action@<sha> # v1.2.3`). A tag can be moved; a SHA can't. Dependabot updates the SHA and the comment together. Pin any new action the same way, or CodeQL's `actions/unpinned-tag` check will flag it.
+
 Dependabot opens at most one grouped PR per ecosystem per month (`.github/dependabot.yml`). Python 3.14 base images are ignored for now; the reason is in that file and in the CHANGELOG.

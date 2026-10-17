@@ -11,8 +11,8 @@ jobs:
     strategy:
       matrix: { dockerfile: [docker/agent/Dockerfile, docker/mlflow/Dockerfile] }
     steps:
-      - uses: actions/checkout@v7
-      - uses: hadolint/hadolint-action@v3.5.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
         with: { dockerfile: "${{ matrix.dockerfile }}", failure-threshold: warning }
 
   images:
@@ -24,18 +24,18 @@ jobs:
           - { name: agent, context: ., file: docker/agent/Dockerfile }
           - { name: mlflow, context: docker/mlflow, file: docker/mlflow/Dockerfile }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: build
         run: docker build -t decksmith-${{ matrix.name }}:ci -f ${{ matrix.file }} ${{ matrix.context }}
       - name: SBOM (CycloneDX)
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           image: decksmith-${{ matrix.name }}:ci
           format: cyclonedx-json
           output-file: sbom-${{ matrix.name }}.cdx.json
           upload-artifact: true
       - name: trivy (fail on fixable HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: decksmith-${{ matrix.name }}:ci
           severity: HIGH,CRITICAL
@@ -44,12 +44,12 @@ jobs:
           format: table
       - name: trivy (SARIF to code scanning)
         if: always() && github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: decksmith-${{ matrix.name }}:ci
           format: sarif
           output: trivy-${{ matrix.name }}.sarif
           exit-code: "0"
       - if: always() && github.event_name != 'pull_request'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@ce5e7eeac396d720fe2d802714996c8ce561e311 # v3.39.0
         with: { sarif_file: "trivy-${{ matrix.name }}.sarif", category: "trivy-${{ matrix.name }}" }
