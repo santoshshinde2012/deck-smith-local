@@ -57,47 +57,13 @@ Each `instabox exec` ends after a time limit, so the script runs in the backgrou
 
 ## What the bootstrap does
 
-```mermaid
-%% diagram: instabox-run
-%% caption: An InstaBox run. The CLI creates a disposable VM, starts the bootstrap in the background, and you poll its log until the summary appears.
-flowchart LR
-  DEV(["Your laptop<br/>instabox CLI"]):::ui
-
-  subgraph VM["InstaBox VM · 4 vCPU · 8 GB · x86_64"]
-    direction TB
-    S1("Tools and Docker<br/>data root on /data"):::local
-    S2("Clone, locked install<br/>.env.instabox"):::local
-    S3[("Seed<br/>synthetic DuckDB")]:::store
-    S4("Compose up<br/>instabox profile"):::app
-    S5("Offline tests<br/>coverage gate"):::core
-    S6("Live-stack e2e<br/>API smoke · demo"):::core
-    S7("Use case<br/>make e2e-usecase"):::core
-    SUM[/"out/instabox-summary.md"/]:::store
-    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> SUM
-  end
-
-  DEV -->|"create, then exec bootstrap.sh in the background"| S1
-  SUM -.->|"poll run.log, then instabox rm"| DEV
-
-  subgraph LEGEND["Legend"]
-    direction LR
-    K1(["You"]):::ui ~~~ K2("Setup"):::local ~~~ K3("Stack"):::app ~~~ K4("Checks"):::core ~~~ K5[("Data / report")]:::store
-  end
-
-  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
-  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
-  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
-  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
-  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
-  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
-  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
-  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
-  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
-  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
-  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E
-  style VM fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style LEGEND fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-```
+<p align="center">
+  <a href="assets/diagrams/instabox-run.svg"><picture>
+    <source type="image/svg+xml" srcset="assets/diagrams/instabox-run.svg">
+    <img src="assets/diagrams/instabox-run.png" alt="An InstaBox run. The CLI creates a disposable VM, starts the bootstrap in the background, and you poll its log until the summary appears.">
+  </picture></a>
+</p>
+<p align="center"><sub>Open the image for full size · Mermaid source: <a href="diagrams/instabox-run.mmd"><code>docs/diagrams/instabox-run.mmd</code></a></sub></p>
 
 1. Installs any missing tools, and Docker if it's absent. Moves Docker's data root to `/data/docker`, because the system disk is small.
 2. Clones the repo into `/data/workspace/deck-smith-local` and checks out `DECKSMITH_REF`.

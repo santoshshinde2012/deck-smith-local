@@ -1,0 +1,93 @@
+%% diagram: system
+%% caption: End-to-end system architecture. One agent, two deployments: a local stack for laptops, CI and InstaBox, and Databricks. Only configuration changes.
+flowchart TB
+  USER(["Analyst in a browser<br/>bob · alice · carol"]):::ui
+
+  subgraph IF["Interfaces"]
+    UI("Streamlit UI<br/>:8501"):::ui
+    API("FastAPI<br/>/v1/decks · :8000"):::app
+    RA("MLflow ResponsesAgent<br/>/responses"):::app
+  end
+
+  AGENT("LangGraph agent<br/>intake → planner<br/>→ human approval<br/>→ data_fetch → writer<br/>→ check → render"):::core
+
+  subgraph GOV["Governed data path: the LLM writes no SQL and no numbers"]
+    FR("Fact registry<br/>f1…fN with provenance"):::core
+    TPL("Approved SQL templates<br/>Databricks SQL dialect"):::core
+    CMP("SqlCompiler<br/>validated params · sqlglot"):::core
+    GR("No-bare-numbers guardrail<br/>446 · rewrite"):::sec
+    PPTX[/"Editable .pptx<br/>native charts · sources slide"/]:::store
+  end
+
+  subgraph LOCAL["Local deployment · laptop, CI, InstaBox · Docker Compose"]
+    L_UC("Per-user views<br/>+ Unity Catalog OSS"):::store
+    L_DS[("DuckDB<br/>synthetic lakehouse")]:::store
+    L_S3[("RustFS · S3 API<br/>Parquet from make publish")]:::store
+    L_ST[("Postgres 18<br/>checkpoints")]:::store
+    L_GW("Portkey OSS<br/>gateway"):::llm
+    L_TR("MLflow 3 OSS<br/>traces · golden-set eval"):::obs
+  end
+
+  subgraph DBX["Databricks deployment · same code, Databricks adapters"]
+    D_UC("Unity Catalog<br/>row filters"):::dbx
+    D_DS[("SQL warehouse<br/>Statement API, user token")]:::dbx
+    D_S3[("S3 · UC volumes")]:::dbx
+    D_ST[("Lakebase<br/>Postgres")]:::dbx
+    D_GW("Portkey Enterprise<br/>hybrid"):::dbx
+    D_TR("Managed<br/>MLflow"):::dbx
+  end
+
+  subgraph MODELS["Models"]
+    FAKE("FakeLLM<br/>in-process · CI default"):::llm
+    OLL("Ollama<br/>on the host"):::ext
+    BED("Amazon Bedrock EU<br/>eu-central-1"):::ext
+    OAI("OpenAI<br/>your own key"):::ext
+  end
+
+  USER -->|asks · approves · downloads| UI
+  UI -->|REST + bearer token| API
+  API -->|start · decide · get| AGENT
+  RA -->|same service| AGENT
+  AGENT -->|writer cites fact IDs| FR
+  FR -->|each fact comes from| TPL
+  TPL --> CMP
+  CMP -->|"resolve the user's view"| L_UC
+  CMP -->|approved SQL, as the user| L_DS
+  AGENT -->|writer prompts| GR
+  GR -->|llm=portkey| L_GW
+  GR -->|llm=fake| FAKE
+  L_GW -->|route · retry · fall back| OLL & BED & OAI
+  AGENT -->|render| PPTX
+  AGENT -.->|checkpoints| L_ST
+  AGENT -.->|one span per node| L_TR
+
+  L_UC -.- D_UC
+  L_DS -.- D_DS
+  L_S3 -.- D_S3
+  L_ST -.- D_ST
+  L_GW -.- D_GW
+  L_TR -.- D_TR
+
+  subgraph LEGEND["Legend · solid: request path · dotted arrow: state and tracing · dotted line: swapped by configuration"]
+    direction LR
+    K1(["User / UI"]):::ui ~~~ K2("API"):::app ~~~ K3("Agent core"):::core ~~~ K4("Guardrail"):::sec ~~~ K5[("Local store")]:::store ~~~ K6("Gateway / LLM"):::llm ~~~ K7("Tracing"):::obs ~~~ K8("Databricks"):::dbx ~~~ K9("External model"):::ext
+  end
+
+  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
+  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
+  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
+  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
+  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
+  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
+  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
+  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
+  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
+  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
+  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E
+  style IF fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style GOV fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style LOCAL fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style DBX fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style MODELS fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  DBX ~~~ LEGEND
+  style LEGEND fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4

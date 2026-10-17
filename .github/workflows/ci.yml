@@ -38,18 +38,20 @@ jobs:
         run: docker compose --profile core --profile app --profile instabox config --quiet
 
   docs:
-    # Markdown style, and every Mermaid diagram: shared palette, no init theme, renders in light and dark.
+    # Markdown style, and the diagrams: shared palette, committed images up to date, every source renders.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: markdownlint
         run: npx -y markdownlint-cli2@0.23.3 "**/*.md"
-      - name: diagrams (mermaid-cli, default and dark themes)
+      - name: diagrams are fresh (sources, rules, committed images)
+        run: python3 scripts/diagrams.py --check
+      - name: diagrams render (mermaid-cli)
         env:
           MMDC: npx -y @mermaid-js/mermaid-cli@11.4.2
           PUPPETEER_CONFIG: ${{ runner.temp }}/puppeteer.json
-        run: echo '{"args":["--no-sandbox"]}' > "$PUPPETEER_CONFIG" && python3 scripts/diagrams.py
+        run: echo '{"args":["--no-sandbox"]}' > "$PUPPETEER_CONFIG" && python3 scripts/diagrams.py --check --render
 
   stack-e2e:
     # The same lean profile InstaBox uses, on a GitHub runner: real Postgres, MLflow, Portkey, agent image.

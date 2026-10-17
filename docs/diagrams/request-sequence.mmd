@@ -1,0 +1,52 @@
+%% diagram: request-sequence
+%% caption: Request to deck. The run pauses for approval before any data is read; data is fetched as the user; the writer is guarded and checked before rendering.
+sequenceDiagram
+  autonumber
+  box rgba(130,80,223,0.14) Client
+    actor U as Analyst (bob)
+    participant UI as Streamlit UI
+  end
+  box rgba(9,105,218,0.12) DeckSmith
+    participant API as FastAPI
+    participant G as LangGraph agent
+  end
+  box rgba(154,103,0,0.14) Ports and adapters
+    participant ID as IdentityProvider
+    participant L as LLMGateway
+    participant ST as StateStore
+    participant D as Catalog + DataSource
+    participant R as Renderer
+  end
+
+  U->>UI: "Build the Q3 2026 retention review"
+  UI->>API: POST /v1/decks (Bearer bob-token)
+  API->>ID: principal(headers)
+  ID-->>API: bob, all regions
+  API->>G: start(request) with principal in a ContextVar
+  G->>L: intake + planner (small tier)
+  L-->>G: outline s01–s05 and template IDs
+  G->>ST: checkpoint, then interrupt
+  G-->>UI: awaiting_approval + outline
+  rect rgba(26,127,55,0.12)
+    Note over U,UI: Human in the loop: nothing has been read yet
+    U->>UI: Edit ("drop the segment slide") or Approve
+    UI->>API: POST /v1/decks/{id}/decision
+    API->>G: resume from checkpoint
+  end
+  G->>D: approved SQL templates, as bob
+  alt nothing visible to the user
+    D-->>G: empty
+    G-->>UI: status no_data, no deck
+  else rows
+    D-->>G: rows → facts f1…f5
+    loop at most 3 writes
+      G->>L: writer (strong tier), behind the bare-number guardrail
+      L-->>G: slides that cite {{fact:fN}}
+      G->>G: check numeric integrity and chart consistency
+    end
+    G->>R: render(spec, facts)
+    R-->>G: .pptx with native charts and a sources slide
+    G-->>UI: done, 5 slides, 5 facts
+    UI->>API: GET /v1/decks/{id}/file
+    API-->>U: editable PowerPoint
+  end

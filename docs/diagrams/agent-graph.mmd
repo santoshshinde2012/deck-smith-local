@@ -1,0 +1,35 @@
+%% diagram: agent-graph
+%% caption: The agent graph: a human approval interrupt, a no-data exit, and a bounded writer and QA loop.
+stateDiagram-v2
+  direction LR
+  [*] --> intake
+  intake --> planner
+  planner --> await_approval
+  await_approval --> data_fetch: approve
+  await_approval --> planner: edit
+  await_approval --> [*]: reject
+  data_fetch --> writer: facts
+  data_fetch --> no_data: no visible rows
+  writer --> check
+  check --> render: clean
+  check --> writer: issues, max 3 writes
+  check --> failed: still failing
+  render --> [*]
+  no_data --> [*]
+  failed --> [*]
+
+  class intake, planner, data_fetch, writer, render core
+  class await_approval ui
+  class check sec
+  class no_data, failed sec
+  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
+  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
+  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
+  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
+  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
+  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
+  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
+  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
+  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
+  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
+  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E

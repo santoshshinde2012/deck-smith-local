@@ -20,7 +20,7 @@ The [README](README.md#why) explains what DeckSmith is for. The [decision record
 
 ## Colour key
 
-Every diagram in this repository uses one semantic palette. Node colours are fixed, so they read the same in GitHub's light and dark themes; lines, labels and group outlines follow the theme.
+Every diagram in this repository uses one semantic palette on a white canvas, with dark lines and labels (#24292F). The diagrams are committed as images, so they look the same in GitHub's light and dark themes.
 
 | Colour | Class | Meaning |
 | --- | --- | --- |
@@ -38,159 +38,25 @@ Every diagram in this repository uses one semantic palette. Node colours are fix
 
 ## System context
 
-```mermaid
-%% diagram: system-context
-%% caption: System context. Analysts talk to the UI; the agent reaches governed data, models, state and tracing only through its ports.
-flowchart TB
-  subgraph PEOPLE["People"]
-    AN(["Analyst<br/>bob · alice · carol"]):::ui
-  end
-
-  subgraph SYS["deck-smith-local"]
-    UI("Streamlit UI<br/>:8501"):::ui
-    API("DeckSmith API + agent<br/>FastAPI · LangGraph · :8000"):::app
-  end
-
-  subgraph DEPS["Behind the ports: swapped by configuration"]
-    IDP("Identity<br/>test tokens · JWT · Apps OBO"):::sec
-    DATA[("Governed data<br/>DuckDB views → Databricks SQL")]:::store
-    STATE[("Checkpoints<br/>Postgres → Lakebase")]:::store
-    GW("LLM gateway<br/>Portkey OSS → Enterprise"):::llm
-    OBS("Tracing and evals<br/>MLflow 3"):::obs
-  end
-
-  MODELS("Model providers<br/>Ollama · OpenAI · Bedrock"):::ext
-  DECK[/"Editable .pptx<br/>facts + sources slide"/]:::store
-
-  AN -->|asks, reviews outline, approves| UI
-  UI -->|REST + bearer token| API
-  API -->|resolve principal| IDP
-  API -->|approved SQL, as the user| DATA
-  API -->|pause and resume| STATE
-  API -->|prompts; numbers only as fact IDs| GW
-  GW -->|routes, retries, falls back| MODELS
-  API -->|one span per node| OBS
-  API -->|renders| DECK
-  DECK -->|download| AN
-
-  subgraph LEGEND["Legend"]
-    direction LR
-    K1(["UI / people"]):::ui ~~~ K2("Agent"):::app ~~~ K3("Identity"):::sec ~~~ K4[("Data store")]:::store ~~~ K5("LLM"):::llm ~~~ K6("Observability"):::obs ~~~ K7("External"):::ext
-  end
-
-  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
-  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
-  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
-  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
-  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
-  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
-  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
-  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
-  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
-  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
-  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E
-  style PEOPLE fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style SYS fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style DEPS fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style LEGEND fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-```
+<p align="center">
+  <a href="docs/assets/diagrams/system-context.svg"><picture>
+    <source type="image/svg+xml" srcset="docs/assets/diagrams/system-context.svg">
+    <img src="docs/assets/diagrams/system-context.png" alt="System context. Analysts talk to the UI; the agent reaches governed data, models, state and tracing only through its ports.">
+  </picture></a>
+</p>
+<p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/system-context.mmd"><code>docs/diagrams/system-context.mmd</code></a></sub></p>
 
 The LLM never writes SQL and never types a number: it picks approved templates, and every figure in its output is a `{{fact:fN}}` reference that the renderer fills in. Every box under "Behind the ports" has a local and a Databricks implementation.
 
 ## Ports and adapters
 
-```mermaid
-%% diagram: hexagonal
-%% caption: Ports and adapters. The core depends only on the eight ports; each port has local and Databricks adapters, and bootstrap.py wires one per port from settings.
-flowchart TB
-  subgraph DRIVING["Interfaces"]
-    UI(["Streamlit UI"]):::ui
-    API("FastAPI<br/>/v1/decks"):::app
-    RA("ResponsesAgent<br/>/responses"):::app
-  end
-
-  subgraph CORE["Application core: no I/O, no SDKs"]
-    SVC("DeckService<br/>start · decide · get"):::core
-    GRAPH("LangGraph agent<br/>plan · approve · fetch<br/>write · check · render"):::core
-    DOM("Domain<br/>DeckSpec · Fact · integrity"):::core
-    GUARD("No-bare-numbers<br/>guardrail (446)"):::sec
-    BOOT("bootstrap.py<br/>composition root"):::app
-  end
-
-  subgraph PORTS["Ports: eight Protocols"]
-    P_ID{{"Identity<br/>Provider"}}:::port
-    P_TPL{{"Template<br/>Repository"}}:::port
-    P_CAT{{"Catalog"}}:::port
-    P_DS{{"Data<br/>Source"}}:::port
-    P_REN{{"Renderer"}}:::port
-    P_ST{{"State<br/>Store"}}:::port
-    P_TR{{"Tracer"}}:::port
-    P_LLM{{"LLM<br/>Gateway"}}:::port
-  end
-
-  subgraph LOCAL["Local adapters: laptop, CI, InstaBox"]
-    L_ID("Static tokens<br/>JWT"):::local
-    L_TPL("SQL template<br/>files"):::local
-    L_CAT("Per-user views<br/>+ UC OSS names"):::local
-    L_DS("DuckDB<br/>via sqlglot"):::local
-    L_REN("python-pptx<br/>native charts"):::local
-    L_ST("In-memory<br/>Postgres 18"):::local
-    L_TR("No-op<br/>MLflow OSS"):::local
-    L_LLM("FakeLLM<br/>Portkey OSS"):::local
-  end
-
-  subgraph DBX["Databricks adapters"]
-    D_ID("Apps<br/>on-behalf-of"):::dbx
-    D_TPL("Same template<br/>files"):::dbx
-    D_CAT("Unity Catalog<br/>row filters"):::dbx
-    D_DS("SQL Statement<br/>API"):::dbx
-    D_REN("Same<br/>renderer"):::dbx
-    D_ST("Lakebase<br/>Postgres"):::dbx
-    D_TR("Managed<br/>MLflow"):::dbx
-    D_LLM("Portkey<br/>Enterprise hybrid"):::dbx
-  end
-
-  UI -->|HTTP + bearer token| API
-  API --> SVC
-  RA --> SVC
-  BOOT -.->|builds with chosen adapters| SVC
-  SVC --> GRAPH
-  GRAPH --> DOM
-  GRAPH --> P_ID & P_TPL & P_CAT & P_DS & P_REN & P_ST & P_TR
-  GRAPH -->|writer| GUARD --> P_LLM
-
-  P_ID -.- L_ID -.- D_ID
-  P_LLM -.- L_LLM -.- D_LLM
-  P_TPL -.- L_TPL -.- D_TPL
-  P_CAT -.- L_CAT -.- D_CAT
-  P_DS -.- L_DS -.- D_DS
-  P_REN -.- L_REN -.- D_REN
-  P_ST -.- L_ST -.- D_ST
-  P_TR -.- L_TR -.- D_TR
-
-  subgraph LEGEND["Legend · solid arrow: calls · dotted line: implements"]
-    direction LR
-    K1(["UI"]):::ui ~~~ K2("API · wiring"):::app ~~~ K3("Core"):::core ~~~ K4{{"Port"}}:::port ~~~ K5("Local adapter"):::local ~~~ K6("Databricks adapter"):::dbx ~~~ K7("Guardrail"):::sec
-  end
-
-  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
-  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
-  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
-  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
-  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
-  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
-  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
-  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
-  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
-  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
-  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E
-  style DRIVING fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style CORE fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style PORTS fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style LOCAL fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style DBX fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style LEGEND fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-```
+<p align="center">
+  <a href="docs/assets/diagrams/hexagonal.svg"><picture>
+    <source type="image/svg+xml" srcset="docs/assets/diagrams/hexagonal.svg">
+    <img src="docs/assets/diagrams/hexagonal.png" alt="Ports and adapters. The core depends only on the eight ports; each port has local and Databricks adapters, and bootstrap.py wires one per port from settings.">
+  </picture></a>
+</p>
+<p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/hexagonal.mmd"><code>docs/diagrams/hexagonal.mmd</code></a></sub></p>
 
 | Layer | Package | May import |
 | --- | --- | --- |
@@ -218,43 +84,13 @@ You select each adapter with a `DECKSMITH_*` variable (see [Configuration](READM
 
 ## The agent graph
 
-```mermaid
-%% diagram: agent-graph
-%% caption: The agent graph: a human approval interrupt, a no-data exit, and a bounded writer and QA loop.
-stateDiagram-v2
-  direction LR
-  [*] --> intake
-  intake --> planner
-  planner --> await_approval
-  await_approval --> data_fetch: approve
-  await_approval --> planner: edit
-  await_approval --> [*]: reject
-  data_fetch --> writer: facts
-  data_fetch --> no_data: no visible rows
-  writer --> check
-  check --> render: clean
-  check --> writer: issues, max 3 writes
-  check --> failed: still failing
-  render --> [*]
-  no_data --> [*]
-  failed --> [*]
-
-  class intake, planner, data_fetch, writer, render core
-  class await_approval ui
-  class check sec
-  class no_data, failed sec
-  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
-  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
-  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
-  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
-  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
-  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
-  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
-  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
-  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
-  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
-  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E
-```
+<p align="center">
+  <a href="docs/assets/diagrams/agent-graph.svg"><picture>
+    <source type="image/svg+xml" srcset="docs/assets/diagrams/agent-graph.svg">
+    <img src="docs/assets/diagrams/agent-graph.png" alt="The agent graph: a human approval interrupt, a no-data exit, and a bounded writer and QA loop.">
+  </picture></a>
+</p>
+<p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/agent-graph.mmd"><code>docs/diagrams/agent-graph.mmd</code></a></sub></p>
 
 The graph enforces three rules:
 
@@ -264,117 +100,25 @@ The graph enforces three rules:
 
 ## A request, end to end
 
-```mermaid
-%% diagram: request-sequence
-%% caption: Request to deck. The run pauses for approval before any data is read; data is fetched as the user; the writer is guarded and checked before rendering.
-sequenceDiagram
-  autonumber
-  box rgba(130,80,223,0.14) Client
-    actor U as Analyst (bob)
-    participant UI as Streamlit UI
-  end
-  box rgba(9,105,218,0.12) DeckSmith
-    participant API as FastAPI
-    participant G as LangGraph agent
-  end
-  box rgba(154,103,0,0.14) Ports and adapters
-    participant ID as IdentityProvider
-    participant L as LLMGateway
-    participant ST as StateStore
-    participant D as Catalog + DataSource
-    participant R as Renderer
-  end
-
-  U->>UI: "Build the Q3 2026 retention review"
-  UI->>API: POST /v1/decks (Bearer bob-token)
-  API->>ID: principal(headers)
-  ID-->>API: bob, all regions
-  API->>G: start(request) with principal in a ContextVar
-  G->>L: intake + planner (small tier)
-  L-->>G: outline s01–s05 and template IDs
-  G->>ST: checkpoint, then interrupt
-  G-->>UI: awaiting_approval + outline
-  rect rgba(26,127,55,0.12)
-    Note over U,UI: Human in the loop: nothing has been read yet
-    U->>UI: Edit ("drop the segment slide") or Approve
-    UI->>API: POST /v1/decks/{id}/decision
-    API->>G: resume from checkpoint
-  end
-  G->>D: approved SQL templates, as bob
-  alt nothing visible to the user
-    D-->>G: empty
-    G-->>UI: status no_data, no deck
-  else rows
-    D-->>G: rows → facts f1…f5
-    loop at most 3 writes
-      G->>L: writer (strong tier), behind the bare-number guardrail
-      L-->>G: slides that cite {{fact:fN}}
-      G->>G: check numeric integrity and chart consistency
-    end
-    G->>R: render(spec, facts)
-    R-->>G: .pptx with native charts and a sources slide
-    G-->>UI: done, 5 slides, 5 facts
-    UI->>API: GET /v1/decks/{id}/file
-    API-->>U: editable PowerPoint
-  end
-```
+<p align="center">
+  <a href="docs/assets/diagrams/request-sequence.svg"><picture>
+    <source type="image/svg+xml" srcset="docs/assets/diagrams/request-sequence.svg">
+    <img src="docs/assets/diagrams/request-sequence.png" alt="Request to deck. The run pauses for approval before any data is read; data is fetched as the user; the writer is guarded and checked before rendering.">
+  </picture></a>
+</p>
+<p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/request-sequence.mmd"><code>docs/diagrams/request-sequence.mmd</code></a></sub></p>
 
 The `Principal`, which carries the user's token, travels in a `ContextVar` (`application/context.py`). It is never stored in graph state, so the token is never written into a checkpoint. Each step logs a JSON line with `run_id` and `duration_ms`, and errors follow the taxonomy in [docs/errors.md](docs/errors.md).
 
 ## Security and permissions
 
-```mermaid
-%% diagram: security-flow
-%% caption: Security and permissions. Every request becomes a principal; data is read only through approved templates and the user's own views; numbers come only from facts; runs belong to their owner.
-flowchart TB
-  REQ(["Request<br/>Authorization: Bearer …"]):::ui
-  ID{{"IdentityProvider"}}:::port
-  E401("401<br/>authentication_failed"):::sec
-  PRIN("Principal<br/>user · groups · token<br/>held in a ContextVar,<br/>never checkpointed"):::core
-  PLAN("Planner<br/>picks template IDs only;<br/>the LLM writes no SQL"):::core
-  VAL("validate_params<br/>types and patterns"):::sec
-  E422("422<br/>invalid_parameters"):::sec
-  CAT{{"Catalog"}}:::port
-  SKIP("Query skipped<br/>AccessDenied is caught"):::sec
-  DS{{"DataSource"}}:::port
-  E409("Status no_data<br/>a refusal, not an empty deck"):::sec
-  FACTS("Facts f1…fn<br/>with provenance"):::core
-  WRITE("Writer<br/>refers to {{fact:fN}}"):::llm
-  G446("Guardrail + check<br/>bare digit → rewrite (446)<br/>max 3 writes"):::sec
-  DECK[/"Deck owned by the user"/]:::store
-  E404("404 to anyone else<br/>run_not_found"):::sec
-
-  REQ --> ID
-  ID -->|unknown or missing token| E401
-  ID -->|valid| PRIN --> PLAN --> VAL
-  VAL -->|bad parameter| E422
-  VAL -->|ok| CAT
-  CAT -->|"table → the user's view<br/>(UC row filters on Databricks)"| DS
-  CAT -->|no view for this user| SKIP
-  SKIP -->|no facts at all| E409
-  DS -->|no rows| SKIP
-  DS -->|rows| FACTS --> WRITE --> G446
-  G446 -->|clean| DECK
-  DECK -->|GET /file by another user| E404
-
-  subgraph LEGEND["Legend"]
-    direction TB
-    K1(["Caller"]):::ui ~~~ K2{{"Port"}}:::port ~~~ K3("Core step"):::core ~~~ K4("LLM step"):::llm ~~~ K5("Check or refusal"):::sec ~~~ K6[/"Artefact"/]:::store
-  end
-
-  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
-  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
-  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
-  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
-  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
-  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
-  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
-  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
-  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
-  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
-  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E
-  style LEGEND fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-```
+<p align="center">
+  <a href="docs/assets/diagrams/security-flow.svg"><picture>
+    <source type="image/svg+xml" srcset="docs/assets/diagrams/security-flow.svg">
+    <img src="docs/assets/diagrams/security-flow.png" alt="Security and permissions. Every request becomes a principal; data is read only through approved templates and the user's own views; numbers come only from facts; runs belong to their owner.">
+  </picture></a>
+</p>
+<p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/security-flow.mmd"><code>docs/diagrams/security-flow.mmd</code></a></sub></p>
 
 - **Who you are.** `StaticTokenIdentity` maps the fixed test tokens to alice (EU-West), bob (all regions) and carol (no access). `JwtIdentity` validates HS256 tokens; `DatabricksAppsIdentity` reads the on-behalf-of token that Databricks Apps forwards.
 - **What you can see.** Locally, each user has one view per table (`v_<table>__<user>`) and no view means no access. On Databricks, Unity Catalog row filters do the same job. The local views are an emulation, **not a security boundary** ([SECURITY.md](SECURITY.md)).
@@ -383,77 +127,13 @@ flowchart TB
 
 ## Deployment
 
-```mermaid
-%% diagram: deployment
-%% caption: Deployment. One Compose project with three profiles: core (full stack), app (agent containers) and instabox (lean, about 4.5 GB). Host ports are on the left of each arrow label.
-flowchart TB
-  BROWSER(["Browser / curl"]):::ui
-
-  subgraph HOST["Docker Compose project: decksmith-local"]
-    subgraph APPS["Agent containers · profiles: app, instabox"]
-      UI("ui<br/>Streamlit · 8501"):::ui
-      AGENT("agent<br/>FastAPI + LangGraph · 8000<br/>non-root, read-only data"):::app
-    end
-    subgraph PLATFORM["Platform services · profiles: core, instabox"]
-      PG[("postgres<br/>Postgres 18 · 5433→5432")]:::store
-      MLF("mlflow<br/>MLflow 3 · 5001→5000"):::obs
-      PK("portkey<br/>Portkey OSS gateway · 8787"):::llm
-    end
-    subgraph COREONLY["Full stack only · profile: core"]
-      UC("unitycatalog<br/>UC OSS · 8081→8080"):::store
-      S3[("objectstore<br/>RustFS S3 · 9000, 9001")]:::store
-    end
-    subgraph VOLS["Named volumes"]
-      V1[("pg18-data")]:::store
-      V2[("mlflow-artifacts")]:::store
-      V3[("agent-out<br/>generated decks")]:::store
-      V4[("object-data")]:::store
-    end
-  end
-
-  LAKE[("./data/lakehouse.duckdb<br/>synthetic, seed 42")]:::store
-  OLLAMA("Ollama on the host<br/>optional · 11434"):::ext
-  CLOUD("Hosted providers<br/>your own key"):::ext
-
-  BROWSER -->|":8501"| UI
-  BROWSER -->|":8000 /docs"| AGENT
-  BROWSER -->|":5001 traces"| MLF
-  UI -->|"http://agent:8000"| AGENT
-  AGENT -->|checkpoints| PG
-  AGENT -->|spans| MLF
-  AGENT -->|LLM calls| PK
-  AGENT -->|"bind mount, read-only"| LAKE
-  AGENT --- V3
-  MLF -->|backend store| PG
-  MLF --- V2
-  PG --- V1
-  S3 --- V4
-  PK -.-> OLLAMA
-  PK -.-> CLOUD
-
-  subgraph LEGEND["Legend"]
-    direction LR
-    K1(["UI"]):::ui ~~~ K2("Agent"):::app ~~~ K3[("Store / volume")]:::store ~~~ K4("Gateway"):::llm ~~~ K5("Observability"):::obs ~~~ K6("External"):::ext
-  end
-
-  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
-  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
-  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
-  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
-  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
-  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
-  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
-  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
-  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
-  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
-  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E
-  style HOST fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style APPS fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style PLATFORM fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style COREONLY fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style VOLS fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style LEGEND fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-```
+<p align="center">
+  <a href="docs/assets/diagrams/deployment.svg"><picture>
+    <source type="image/svg+xml" srcset="docs/assets/diagrams/deployment.svg">
+    <img src="docs/assets/diagrams/deployment.png" alt="Deployment. One Compose project with three profiles: core (full stack), app (agent containers) and instabox (lean, about 4.5 GB). Host ports are on the left of each arrow label.">
+  </picture></a>
+</p>
+<p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/deployment.mmd"><code>docs/diagrams/deployment.mmd</code></a></sub></p>
 
 | Profile | Services | Use it for |
 | --- | --- | --- |
@@ -475,29 +155,13 @@ Every service has memory and CPU limits, log rotation and `no-new-privileges`, a
 
 **Dependency inversion.** The application depends on abstractions in `decksmith.ports`. Concrete classes are created in one place:
 
-```mermaid
-%% diagram: composition-root
-%% caption: Settings choose one adapter per port; bootstrap is the only place concrete classes are built.
-flowchart LR
-  CFG("Settings<br/>DECKSMITH_* environment, validated at start-up"):::sec
-  REG("Adapter registries<br/>one factory per adapter"):::port
-  BOOT("bootstrap.build_container<br/>composition root"):::app
-  C("Container<br/>DeckService · identity · LLM · state store"):::core
-  CFG -->|selects| BOOT
-  REG -->|factories| BOOT
-  BOOT -->|builds| C
-  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
-  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
-  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
-  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
-  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
-  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
-  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
-  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
-  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
-  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
-  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E
-```
+<p align="center">
+  <a href="docs/assets/diagrams/composition-root.svg"><picture>
+    <source type="image/svg+xml" srcset="docs/assets/diagrams/composition-root.svg">
+    <img src="docs/assets/diagrams/composition-root.png" alt="Settings choose one adapter per port; bootstrap is the only place concrete classes are built.">
+  </picture></a>
+</p>
+<p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/composition-root.mmd"><code>docs/diagrams/composition-root.mmd</code></a></sub></p>
 
 Tests use the same root and override only what they need. For example, `build_container(settings, llm=FakeLLM({"writer": ["bare_digit"]}))` drives the QA loop.
 
@@ -522,10 +186,10 @@ Tests use the same root and override only what they need. For example, `build_co
 
 ## Editing the diagrams
 
-The diagrams are Mermaid, so GitHub renders them natively in both themes. Keep three rules:
+Each diagram's Mermaid source is a file in [`docs/diagrams/`](docs/diagrams). `make diagrams` renders every source to an SVG and a PNG fallback in [`docs/assets/diagrams/`](docs/assets/diagrams), on a white background with the shared theme in [`docs/diagrams/mermaid.json`](docs/diagrams/mermaid.json). The Markdown embeds those images rather than Mermaid blocks, because GitHub re-themes Mermaid blocks in dark mode and the white canvas would be lost.
 
-- Use only the classes in the [colour key](#colour-key), copied verbatim from `PALETTE` in [`scripts/diagrams.py`](scripts/diagrams.py).
-- Don't add a `%%{init}%%` theme; it would break dark mode.
-- Give each diagram a `%% diagram: <name>` line and a `%% caption:` line.
+1. Edit or add `docs/diagrams/<name>.mmd`. Start it with `%% diagram: <name>` and a `%% caption:` line; the caption becomes the image's alt text.
+2. Use only the classes in the [colour key](#colour-key), copied verbatim from `PALETTE` in [`scripts/diagrams.py`](scripts/diagrams.py), and the shared group style. Don't add a `%%{init}%%` block.
+3. Run `make diagrams` (Node.js for `npx`, or `MMDC` pointing at an installed `mmdc`), embed the image where it belongs, and commit the source, the images and `manifest.json` together.
 
-`make diagrams` checks the palette and renders every diagram with mermaid-cli in the default and dark themes; it needs Node.js for `npx`, or `MMDC` pointing at an installed `mmdc`. To preview one diagram as PNGs, run `python scripts/diagrams.py --png out/diagrams --only hexagonal`.
+`make diagrams-check`, which CI runs, fails when a source breaks a rule, a document still contains a Mermaid block, an embedded image is missing, or an image is older than its source. `manifest.json` records a hash of each source and the theme for that comparison.

@@ -1,0 +1,55 @@
+%% diagram: system-context
+%% caption: System context. Analysts talk to the UI; the agent reaches governed data, models, state and tracing only through its ports.
+flowchart TB
+  subgraph PEOPLE["People"]
+    AN(["Analyst<br/>bob · alice · carol"]):::ui
+  end
+
+  subgraph SYS["deck-smith-local"]
+    UI("Streamlit UI<br/>:8501"):::ui
+    API("DeckSmith API + agent<br/>FastAPI · LangGraph · :8000"):::app
+  end
+
+  subgraph DEPS["Behind the ports: swapped by configuration"]
+    IDP("Identity<br/>test tokens · JWT · Apps OBO"):::sec
+    DATA[("Governed data<br/>DuckDB views → Databricks SQL")]:::store
+    STATE[("Checkpoints<br/>Postgres → Lakebase")]:::store
+    GW("LLM gateway<br/>Portkey OSS → Enterprise"):::llm
+    OBS("Tracing and evals<br/>MLflow 3"):::obs
+  end
+
+  MODELS("Model providers<br/>Ollama · OpenAI · Bedrock"):::ext
+  DECK[/"Editable .pptx<br/>facts + sources slide"/]:::store
+
+  AN -->|asks, reviews outline, approves| UI
+  UI -->|REST + bearer token| API
+  API -->|resolve principal| IDP
+  API -->|approved SQL, as the user| DATA
+  API -->|pause and resume| STATE
+  API -->|prompts; numbers only as fact IDs| GW
+  GW -->|routes, retries, falls back| MODELS
+  API -->|one span per node| OBS
+  API -->|renders| DECK
+  DECK -->|download| AN
+
+  subgraph LEGEND["Legend"]
+    direction LR
+    K1(["UI / people"]):::ui ~~~ K2("Agent"):::app ~~~ K3("Identity"):::sec ~~~ K4[("Data store")]:::store ~~~ K5("LLM"):::llm ~~~ K6("Observability"):::obs ~~~ K7("External"):::ext
+  end
+
+  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
+  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
+  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
+  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
+  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
+  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
+  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
+  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
+  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
+  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
+  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E
+  style PEOPLE fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style SYS fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style DEPS fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  MODELS ~~~ LEGEND
+  style LEGEND fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4

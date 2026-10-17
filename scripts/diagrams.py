@@ -1,22 +1,29 @@
-"""Check and render every Mermaid diagram in the docs, in GitHub's light and dark themes.
+"""Build and check the architecture diagrams.
 
-One semantic palette is used everywhere (see ``PALETTE``). Nodes carry explicit fill, stroke and
-text colours, so they look the same in both themes. Diagrams set no ``%%{init}%%`` theme, so
-edges, edge labels and subgraph titles follow GitHub's light or dark theme automatically. A diagram
-may appear in more than one file (the README repeats the hexagonal view), but every copy with the
-same name must be identical.
+The Mermaid sources live in ``docs/diagrams/*.mmd``. They are rendered with mermaid-cli to SVG,
+with a PNG fallback, on a white background into ``docs/assets/diagrams/``, and the Markdown embeds
+those images. A pre-rendered image looks the same in GitHub's light and dark themes; a Mermaid
+block in Markdown would be re-themed by GitHub and lose its white canvas.
 
-    python scripts/diagrams.py                     # check palette + render each diagram in both themes
-    python scripts/diagrams.py --svg docs/diagrams # also write light-theme SVGs of named diagrams
-    python scripts/diagrams.py --png out/arch --only hexagonal   # PNG previews (light and dark)
+    python scripts/diagrams.py            # check the sources, then render every image and the manifest
+    python scripts/diagrams.py --check    # fail if a source breaks a rule or an image is stale
+    python scripts/diagrams.py --check --render   # also prove each source renders (CI)
+
+Rules: every node class comes from ``PALETTE`` verbatim; groups use ``GROUP_STYLE``; no ``%%{init}%%``
+(the shared theme is ``docs/diagrams/mermaid.json``: white canvas, dark #24292F lines and labels);
+each source names itself (``%% diagram: <file name>``) and has a ``%% caption:``; no Markdown file
+contains a Mermaid block; every embedded image exists; ``manifest.json`` holds a hash of each source
+and the theme, so an image that was not rebuilt after an edit fails the check.
 
 Rendering needs mermaid-cli: ``MMDC`` is the command (default ``mmdc``, for example
-``MMDC="npx -y @mermaid-js/mermaid-cli@11"``) and ``PUPPETEER_CONFIG`` an optional browser config.
+``MMDC="npx -y @mermaid-js/mermaid-cli@11.4.2"``) and ``PUPPETEER_CONFIG`` an optional browser config.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import shlex
@@ -26,7 +33,13 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "docs" / "diagrams"
+OUT = ROOT / "docs" / "assets" / "diagrams"
+THEME = SRC / "mermaid.json"
+MANIFEST = OUT / "manifest.json"
 DOCS = ["README.md", "ARCHITECTURE.md", *sorted(str(p.relative_to(ROOT)) for p in (ROOT / "docs").glob("*.md"))]
+INK = "#24292F"  # lines, edge labels and group titles on the white canvas
+PAGE_WIDTH = 4000  # mmdc shrinks a diagram to fit its page, so give wide ones room
 
 # name: (fill, stroke, text, extra). Text on every fill meets WCAG AA (4.5:1) or better.
 PALETTE: dict[str, tuple[str, str, str, str]] = {
@@ -46,101 +59,145 @@ CLASSDEFS = {
     name: f"classDef {name} fill:{f},stroke:{s},stroke-width:2px,color:{t}{x}" for name, (f, s, t, x) in PALETTE.items()
 }
 GROUP_STYLE = "fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4"
-THEMES = {"light": ("default", "#FFFFFF"), "dark": ("dark", "#0D1117")}  # GitHub's page backgrounds
-
-BLOCK = re.compile(r"```mermaid\n(.*?)```", re.S)
+IMAGE_REF = re.compile(r"assets/diagrams/([\w-]+)\.(svg|png)")
 
 
-def blocks() -> list[tuple[str, int, str, str]]:
-    """(file, line, name, source) for every mermaid block."""
-    found = []
-    for rel in DOCS:
-        text = (ROOT / rel).read_text()
-        for m in BLOCK.finditer(text):
-            src = m.group(1)
-            name = re.search(r"^%% diagram: (\S+)", src, re.M)
-            found.append((rel, text[: m.start()].count("\n") + 1, name.group(1) if name else "", src))
-    return found
+def sources() -> dict[str, str]:
+    return {p.stem: p.read_text() for p in sorted(SRC.glob("*.mmd"))}
 
 
-def check_palette(rel: str, line: int, src: str) -> list[str]:
+def digest(src: str) -> str:
+    return hashlib.sha256((THEME.read_text() + "\0" + src).encode()).hexdigest()
+
+
+def check_theme() -> list[str]:
+    theme = json.loads(THEME.read_text())
+    tv = theme.get("themeVariables", {})
     problems = []
+    if tv.get("background", "").upper() != "#FFFFFF":
+        problems.append(f"{THEME.name}: themeVariables.background must be #FFFFFF")
+    for key in ("lineColor", "textColor", "titleColor", "primaryTextColor", "signalColor", "signalTextColor"):
+        if tv.get(key, "").upper() != INK:
+            problems.append(f"{THEME.name}: themeVariables.{key} must be {INK} so it reads on white")
+    if theme.get("htmlLabels") is not False:
+        problems.append(f"{THEME.name}: set htmlLabels to false so the SVGs carry plain SVG text")
+    return problems
+
+
+def check_source(name: str, src: str) -> list[str]:
+    problems = []
+    if not re.search(rf"^%% diagram: {re.escape(name)}$", src, re.M):
+        problems.append(f"needs a '%% diagram: {name}' line matching its file name")
+    if not re.search(r"^%% caption: \S", src, re.M):
+        problems.append("needs a '%% caption: ...' line (used as the image's alt text)")
     if "%%{init" in src:
-        problems.append("sets an init theme; leave theming to GitHub so dark mode works")
+        problems.append("sets an init block; the shared theme is docs/diagrams/mermaid.json")
     for m in re.finditer(r"^\s*classDef (\S+) (.*)$", src, re.M):
-        name = m.group(1)
-        if name not in CLASSDEFS:
-            problems.append(f"classDef {name!r} is not in the palette")
-        elif m.group(0).strip() != CLASSDEFS[name]:
-            want = CLASSDEFS[name]
-            problems.append(f"classDef {name!r} differs from the palette:\n    {m.group(0).strip()}\n    {want}")
+        cls = m.group(1)
+        if cls not in CLASSDEFS:
+            problems.append(f"classDef {cls!r} is not in the palette")
+        elif m.group(0).strip() != CLASSDEFS[cls]:
+            want = CLASSDEFS[cls]
+            problems.append(f"classDef {cls!r} differs from the palette:\n    {m.group(0).strip()}\n    {want}")
     used = set(re.findall(r":::(\w+)", src)) | set(re.findall(r"^\s*class\s.*\s(\w+)\s*$", src, re.M))
-    for name in sorted(used - set(re.findall(r"^\s*classDef (\S+)", src, re.M))):
-        problems.append(f"uses class {name!r} without defining it")
+    for cls in sorted(used - set(re.findall(r"^\s*classDef (\S+)", src, re.M))):
+        problems.append(f"uses class {cls!r} without defining it")
     for m in re.finditer(r"^\s*style (\S+) (.*)$", src, re.M):
         if m.group(2).strip() != GROUP_STYLE:
             problems.append(f"style {m.group(1)} should be the shared group style: {GROUP_STYLE}")
-    return [f"{rel}:{line}: {p}" for p in problems]
+    return [f"docs/diagrams/{name}.mmd: {p}" for p in problems]
 
 
-def render(src: str, out: Path, theme: str, scale: int = 1) -> str | None:
+def check_docs(names: set[str]) -> list[str]:
+    problems, referenced = [], set()
+    for rel in DOCS:
+        text = (ROOT / rel).read_text()
+        if "```mermaid" in text:
+            problems.append(f"{rel}: has a Mermaid block; add it to docs/diagrams/ and embed the image instead")
+        for m in IMAGE_REF.finditer(text):
+            referenced.add(m.group(1))
+            if m.group(1) not in names:
+                problems.append(f"{rel}: embeds {m.group(0)}, which has no source in docs/diagrams/")
+    problems += [f"docs/diagrams/{n}.mmd: not embedded in any document" for n in sorted(names - referenced)]
+    return problems
+
+
+def check_images(srcs: dict[str, str]) -> list[str]:
+    manifest = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
+    problems = []
+    for name, src in srcs.items():
+        missing = [ext for ext in ("svg", "png") if not (OUT / f"{name}.{ext}").exists()]
+        if missing or manifest.get(name) != digest(src):
+            problems.append(f"{name}: image is missing or stale; run `make diagrams` and commit the result")
+    extra = sorted({p.stem for p in OUT.glob("*.*") if p.suffix in (".svg", ".png")} - set(srcs))
+    problems += [f"docs/assets/diagrams/{n}.*: no source in docs/diagrams/; delete it" for n in extra]
+    problems += [f"manifest.json: entry {n!r} has no source" for n in sorted(set(manifest) - set(srcs))]
+    return problems
+
+
+def render(src: str, out: Path) -> str | None:
     mmdc = shlex.split(os.environ.get("MMDC", "mmdc"))
-    mermaid_theme, background = THEMES[theme]
     with tempfile.NamedTemporaryFile("w", suffix=".mmd", delete=False) as f:
         f.write(src)
-    cmd = [*mmdc, "-q", "-i", f.name, "-o", str(out), "-t", mermaid_theme, "-b", background, "-s", str(scale)]
+    cmd = [*mmdc, "-q", "-i", f.name, "-o", str(out), "-c", str(THEME), "-b", "white", "-w", str(PAGE_WIDTH)]
     if os.environ.get("PUPPETEER_CONFIG"):
         cmd += ["-p", os.environ["PUPPETEER_CONFIG"]]
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     os.unlink(f.name)
     if result.returncode != 0:
-        return (result.stderr or result.stdout).strip().splitlines()[-1]
-    if out.suffix == ".svg" and "Syntax error" in out.read_text():
-        return "Syntax error in rendered SVG"
+        return ((result.stderr or result.stdout).strip().splitlines() or ["mmdc failed"])[-1]
+    if out.suffix == ".svg":
+        svg = out.read_text()
+        if "Syntax error" in svg or "<foreignObject" in svg:
+            return "syntax error or HTML label in the rendered SVG"
+        out.write_text(fixed_size(svg))
     return None
+
+
+def fixed_size(svg: str) -> str:
+    """Give the SVG its natural size, so an <img> shows it at scale and GitHub shrinks it only to fit."""
+    box = re.search(r'viewBox="\S+ \S+ ([\d.]+) ([\d.]+)"', svg)
+    if not box:
+        return svg
+    w, h = (round(float(v)) for v in box.groups())
+    svg = svg.replace('width="100%"', f'width="{w}" height="{h}"', 1)
+    return re.sub(r"max-width: [\d.]+px; ?", "", svg, count=1)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--svg", type=Path, help="write light-theme SVGs of named diagrams here")
-    ap.add_argument("--png", type=Path, help="write light and dark PNG previews here")
-    ap.add_argument("--only", help="limit --svg/--png to one diagram name")
-    ap.add_argument("--no-render", action="store_true", help="check the palette only")
+    ap.add_argument("--check", action="store_true", help="check sources, documents and image freshness only")
+    ap.add_argument("--render", action="store_true", help="with --check: also render each source to a temp dir")
     args = ap.parse_args()
 
-    found = blocks()
-    if args.only and args.only not in {n for _, _, n, _ in found}:
-        print(f"no diagram named {args.only!r}", file=sys.stderr)
-        return 1
-    problems = [p for rel, line, _, src in found for p in check_palette(rel, line, src)]
-    sources: dict[str, str] = {}
-    for rel, line, name, src in found:
-        if name and sources.setdefault(name, src) != src:
-            problems.append(f"{rel}:{line}: diagram {name!r} differs from another copy with the same name")
-    if not args.no_render:
-        with tempfile.TemporaryDirectory() as tmp:
-            for rel, line, name, src in found:
-                for theme in THEMES:
-                    err = render(src, Path(tmp) / "d.svg", theme)
-                    status = "ok" if err is None else f"FAIL: {err}"
-                    print(f"{rel}:{line} {name or '-':<22} {theme:<5} {status}")
-                    if err:
-                        problems.append(f"{rel}:{line}: {theme} render failed: {err}")
-    for name, src in sources.items():
-        if args.only and name != args.only:
-            continue
-        if args.svg:
-            args.svg.mkdir(parents=True, exist_ok=True)
-            err = render(src, args.svg / f"{name}.svg", "light")
-            problems += [f"{name}: svg failed: {err}"] if err else []
-        if args.png:
-            args.png.mkdir(parents=True, exist_ok=True)
-            for theme in THEMES:
-                err = render(src, args.png / f"{name}-{theme}.png", theme, scale=2)
-                problems += [f"{name}: {theme} png failed: {err}"] if err else []
+    srcs = sources()
+    problems = check_theme() + [p for name, src in srcs.items() for p in check_source(name, src)]
+    problems += check_docs(set(srcs))
+    if args.check:
+        problems += check_images(srcs)
+        if args.render:
+            with tempfile.TemporaryDirectory() as tmp:
+                for name, src in srcs.items():
+                    err = render(src, Path(tmp) / f"{name}.svg")
+                    print(f"{name:<20} {'ok' if err is None else 'FAIL: ' + err}")
+                    problems += [f"{name}: render failed: {err}"] if err else []
+    elif not problems:
+        OUT.mkdir(parents=True, exist_ok=True)
+        for old in OUT.glob("*.*"):
+            if old.suffix in (".svg", ".png") and old.stem not in srcs:
+                old.unlink()
+        manifest = {}
+        for name, src in srcs.items():
+            err = render(src, OUT / f"{name}.svg") or render(src, OUT / f"{name}.png")
+            print(f"{name:<20} {'ok' if err is None else 'FAIL: ' + err}")
+            if err:
+                problems.append(f"{name}: render failed: {err}")
+            else:
+                manifest[name] = digest(src)
+        MANIFEST.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     for p in problems:
         print(p, file=sys.stderr)
-    print(f"{len(found)} diagrams, {len(problems)} problems")
+    print(f"{len(srcs)} diagrams, {len(problems)} problems")
     return 1 if problems else 0
 
 

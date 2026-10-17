@@ -114,197 +114,25 @@ DeckSmith is one agent with two deployments. The same code runs on a local stack
 
 ### System overview
 
-```mermaid
-%% diagram: system
-%% caption: End-to-end system architecture. One agent, two deployments: a local stack for laptops, CI and InstaBox, and Databricks. Only configuration changes.
-flowchart TB
-  USER(["Analyst in a browser<br/>bob · alice · carol"]):::ui
-
-  subgraph IF["Interfaces"]
-    UI("Streamlit UI<br/>:8501"):::ui
-    API("FastAPI<br/>/v1/decks · :8000"):::app
-    RA("MLflow ResponsesAgent<br/>/responses"):::app
-  end
-
-  AGENT("LangGraph agent<br/>intake → planner<br/>→ human approval<br/>→ data_fetch → writer<br/>→ check → render"):::core
-
-  subgraph GOV["Governed data path: the LLM writes no SQL and no numbers"]
-    FR("Fact registry<br/>f1…fN with provenance"):::core
-    TPL("Approved SQL templates<br/>Databricks SQL dialect"):::core
-    CMP("SqlCompiler<br/>validated params · sqlglot"):::core
-    GR("No-bare-numbers guardrail<br/>446 · rewrite"):::sec
-    PPTX[/"Editable .pptx<br/>native charts · sources slide"/]:::store
-  end
-
-  subgraph LOCAL["Local deployment · laptop, CI, InstaBox · Docker Compose"]
-    L_UC("Per-user views<br/>+ Unity Catalog OSS"):::store
-    L_DS[("DuckDB<br/>synthetic lakehouse")]:::store
-    L_S3[("RustFS · S3 API<br/>Parquet from make publish")]:::store
-    L_ST[("Postgres 18<br/>checkpoints")]:::store
-    L_GW("Portkey OSS<br/>gateway"):::llm
-    L_TR("MLflow 3 OSS<br/>traces · golden-set eval"):::obs
-  end
-
-  subgraph DBX["Databricks deployment · same code, Databricks adapters"]
-    D_UC("Unity Catalog<br/>row filters"):::dbx
-    D_DS[("SQL warehouse<br/>Statement API, user token")]:::dbx
-    D_S3[("S3 · UC volumes")]:::dbx
-    D_ST[("Lakebase<br/>Postgres")]:::dbx
-    D_GW("Portkey Enterprise<br/>hybrid"):::dbx
-    D_TR("Managed<br/>MLflow"):::dbx
-  end
-
-  subgraph MODELS["Models"]
-    FAKE("FakeLLM<br/>in-process · CI default"):::llm
-    OLL("Ollama<br/>on the host"):::ext
-    BED("Amazon Bedrock EU<br/>eu-central-1"):::ext
-    OAI("OpenAI<br/>your own key"):::ext
-  end
-
-  USER -->|asks · approves · downloads| UI
-  UI -->|REST + bearer token| API
-  API -->|start · decide · get| AGENT
-  RA -->|same service| AGENT
-  AGENT -->|writer cites fact IDs| FR
-  FR -->|each fact comes from| TPL
-  TPL --> CMP
-  CMP -->|"resolve the user's view"| L_UC
-  CMP -->|approved SQL, as the user| L_DS
-  AGENT -->|writer prompts| GR
-  GR -->|llm=portkey| L_GW
-  GR -->|llm=fake| FAKE
-  L_GW -->|route · retry · fall back| OLL & BED & OAI
-  AGENT -->|render| PPTX
-  AGENT -.->|checkpoints| L_ST
-  AGENT -.->|one span per node| L_TR
-
-  L_UC -.- D_UC
-  L_DS -.- D_DS
-  L_S3 -.- D_S3
-  L_ST -.- D_ST
-  L_GW -.- D_GW
-  L_TR -.- D_TR
-
-  subgraph LEGEND["Legend · solid: request path · dotted arrow: state and tracing · dotted line: swapped by configuration"]
-    direction LR
-    K1(["User / UI"]):::ui ~~~ K2("API"):::app ~~~ K3("Agent core"):::core ~~~ K4("Guardrail"):::sec ~~~ K5[("Local store")]:::store ~~~ K6("Gateway / LLM"):::llm ~~~ K7("Tracing"):::obs ~~~ K8("Databricks"):::dbx ~~~ K9("External model"):::ext
-  end
-
-  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
-  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
-  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
-  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
-  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
-  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
-  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
-  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
-  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
-  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
-  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E
-  style IF fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style GOV fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style LOCAL fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style DBX fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style MODELS fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style LEGEND fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-```
+<p align="center">
+  <a href="docs/assets/diagrams/system.svg"><picture>
+    <source type="image/svg+xml" srcset="docs/assets/diagrams/system.svg">
+    <img src="docs/assets/diagrams/system.png" alt="End-to-end system architecture. One agent, two deployments: a local stack for laptops, CI and InstaBox, and Databricks. Only configuration changes.">
+  </picture></a>
+</p>
+<p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/system.mmd"><code>docs/diagrams/system.mmd</code></a></sub></p>
 
 A request goes from the browser through the Streamlit UI and FastAPI into the LangGraph agent, which pauses for a person's approval before it reads any data. Numbers come only from approved SQL templates run as the signed-in user; each result becomes a fact in the registry, the writer cites facts by ID, and a guardrail and an integrity check reject any number typed by the model. A dotted line joins each local service to the Databricks service that replaces it. Model calls go through the Portkey gateway to Ollama, Bedrock EU or OpenAI; in CI the in-process FakeLLM stands in for the gateway, so no keys or network are needed.
 
 ### Ports and adapters
 
-```mermaid
-%% diagram: hexagonal
-%% caption: Ports and adapters. The core depends only on the eight ports; each port has local and Databricks adapters, and bootstrap.py wires one per port from settings.
-flowchart TB
-  subgraph DRIVING["Interfaces"]
-    UI(["Streamlit UI"]):::ui
-    API("FastAPI<br/>/v1/decks"):::app
-    RA("ResponsesAgent<br/>/responses"):::app
-  end
-
-  subgraph CORE["Application core: no I/O, no SDKs"]
-    SVC("DeckService<br/>start · decide · get"):::core
-    GRAPH("LangGraph agent<br/>plan · approve · fetch<br/>write · check · render"):::core
-    DOM("Domain<br/>DeckSpec · Fact · integrity"):::core
-    GUARD("No-bare-numbers<br/>guardrail (446)"):::sec
-    BOOT("bootstrap.py<br/>composition root"):::app
-  end
-
-  subgraph PORTS["Ports: eight Protocols"]
-    P_ID{{"Identity<br/>Provider"}}:::port
-    P_TPL{{"Template<br/>Repository"}}:::port
-    P_CAT{{"Catalog"}}:::port
-    P_DS{{"Data<br/>Source"}}:::port
-    P_REN{{"Renderer"}}:::port
-    P_ST{{"State<br/>Store"}}:::port
-    P_TR{{"Tracer"}}:::port
-    P_LLM{{"LLM<br/>Gateway"}}:::port
-  end
-
-  subgraph LOCAL["Local adapters: laptop, CI, InstaBox"]
-    L_ID("Static tokens<br/>JWT"):::local
-    L_TPL("SQL template<br/>files"):::local
-    L_CAT("Per-user views<br/>+ UC OSS names"):::local
-    L_DS("DuckDB<br/>via sqlglot"):::local
-    L_REN("python-pptx<br/>native charts"):::local
-    L_ST("In-memory<br/>Postgres 18"):::local
-    L_TR("No-op<br/>MLflow OSS"):::local
-    L_LLM("FakeLLM<br/>Portkey OSS"):::local
-  end
-
-  subgraph DBX["Databricks adapters"]
-    D_ID("Apps<br/>on-behalf-of"):::dbx
-    D_TPL("Same template<br/>files"):::dbx
-    D_CAT("Unity Catalog<br/>row filters"):::dbx
-    D_DS("SQL Statement<br/>API"):::dbx
-    D_REN("Same<br/>renderer"):::dbx
-    D_ST("Lakebase<br/>Postgres"):::dbx
-    D_TR("Managed<br/>MLflow"):::dbx
-    D_LLM("Portkey<br/>Enterprise hybrid"):::dbx
-  end
-
-  UI -->|HTTP + bearer token| API
-  API --> SVC
-  RA --> SVC
-  BOOT -.->|builds with chosen adapters| SVC
-  SVC --> GRAPH
-  GRAPH --> DOM
-  GRAPH --> P_ID & P_TPL & P_CAT & P_DS & P_REN & P_ST & P_TR
-  GRAPH -->|writer| GUARD --> P_LLM
-
-  P_ID -.- L_ID -.- D_ID
-  P_LLM -.- L_LLM -.- D_LLM
-  P_TPL -.- L_TPL -.- D_TPL
-  P_CAT -.- L_CAT -.- D_CAT
-  P_DS -.- L_DS -.- D_DS
-  P_REN -.- L_REN -.- D_REN
-  P_ST -.- L_ST -.- D_ST
-  P_TR -.- L_TR -.- D_TR
-
-  subgraph LEGEND["Legend · solid arrow: calls · dotted line: implements"]
-    direction LR
-    K1(["UI"]):::ui ~~~ K2("API · wiring"):::app ~~~ K3("Core"):::core ~~~ K4{{"Port"}}:::port ~~~ K5("Local adapter"):::local ~~~ K6("Databricks adapter"):::dbx ~~~ K7("Guardrail"):::sec
-  end
-
-  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
-  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
-  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
-  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
-  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
-  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
-  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
-  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
-  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
-  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
-  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E
-  style DRIVING fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style CORE fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style PORTS fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style LOCAL fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style DBX fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-  style LEGEND fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
-```
+<p align="center">
+  <a href="docs/assets/diagrams/hexagonal.svg"><picture>
+    <source type="image/svg+xml" srcset="docs/assets/diagrams/hexagonal.svg">
+    <img src="docs/assets/diagrams/hexagonal.png" alt="Ports and adapters. The core depends only on the eight ports; each port has local and Databricks adapters, and bootstrap.py wires one per port from settings.">
+  </picture></a>
+</p>
+<p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/hexagonal.mmd"><code>docs/diagrams/hexagonal.mmd</code></a></sub></p>
 
 The application core depends only on eight small `Protocol` ports, and every technology lives in an adapter with a local and a Databricks implementation. `bootstrap.py` is the composition root and the only module that imports adapters; `tests/architecture` enforces that rule, and `tests/contract` runs the same behavioural tests against each adapter of a port.
 
@@ -318,36 +146,13 @@ The application core depends only on eight small `Protocol` ports, and every tec
 
 ### From request to deck
 
-```mermaid
-%% diagram: request-to-deck
-%% caption: Request to deck, compact. The full version with every port call is in ARCHITECTURE.md.
-sequenceDiagram
-  autonumber
-  box rgba(130,80,223,0.14) Client
-    actor U as Analyst
-    participant UI as UI + API
-  end
-  box rgba(26,127,55,0.12) DeckSmith
-    participant G as LangGraph agent
-  end
-  box rgba(154,103,0,0.14) Behind the ports
-    participant L as LLM gateway
-    participant D as Governed data
-    participant R as Renderer
-  end
-  U->>UI: "Build the Q3 2026 retention review"
-  UI->>G: start, as the signed-in user
-  G->>L: plan: outline and template IDs
-  G-->>U: outline, paused for approval
-  U->>UI: Approve (or edit, or reject)
-  UI->>G: resume from the checkpoint
-  G->>D: approved SQL, as the user
-  D-->>G: rows become facts f1…fN
-  G->>L: write slides that cite fact IDs
-  G->>G: guardrail and numeric check
-  G->>R: render with the facts
-  R-->>U: editable .pptx and a sources slide
-```
+<p align="center">
+  <a href="docs/assets/diagrams/request-to-deck.svg"><picture>
+    <source type="image/svg+xml" srcset="docs/assets/diagrams/request-to-deck.svg">
+    <img src="docs/assets/diagrams/request-to-deck.png" alt="Request to deck, compact. The full version with every port call is in ARCHITECTURE.md.">
+  </picture></a>
+</p>
+<p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/request-to-deck.mmd"><code>docs/diagrams/request-to-deck.mmd</code></a></sub></p>
 
 The run is checkpointed while it waits for approval, so any process can resume it. If the user can see none of the requested data, the run stops with `no_data` and no deck is built. The [full sequence](ARCHITECTURE.md#a-request-end-to-end), the [agent graph](ARCHITECTURE.md#the-agent-graph), the [security flow](ARCHITECTURE.md#security-and-permissions) and the [Compose deployment](ARCHITECTURE.md#deployment) are in [ARCHITECTURE.md](ARCHITECTURE.md), all in the same palette.
 
@@ -497,7 +302,7 @@ The model IDs in `configs/portkey` are examples only; replace them with models y
 make test          # unit, contract, architecture, integration and e2e (fake LLM, offline)
 make check         # what CI runs: lint, strict type check, tests with the 90% coverage gate
 make e2e-usecase   # the use case above, against a running API
-make diagrams      # validate every Mermaid diagram in light and dark themes
+make diagrams      # re-render the architecture images from docs/diagrams/*.mmd
 ```
 
 <details>
