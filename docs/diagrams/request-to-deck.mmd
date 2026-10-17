@@ -1,0 +1,28 @@
+%% diagram: request-to-deck
+%% caption: Request to deck, compact. The full version with every port call is in ARCHITECTURE.md.
+sequenceDiagram
+  autonumber
+  box rgba(130,80,223,0.14) Client
+    actor U as Analyst
+    participant UI as UI + API
+  end
+  box rgba(26,127,55,0.12) DeckSmith
+    participant G as LangGraph agent
+  end
+  box rgba(154,103,0,0.14) Behind the ports
+    participant L as LLM gateway
+    participant D as Governed data
+    participant R as Renderer
+  end
+  U->>UI: "Build the Q3 2026 retention review"
+  UI->>G: start, as the signed-in user
+  G->>L: plan: outline and template IDs
+  G-->>U: outline, paused for approval
+  U->>UI: Approve (or edit, or reject)
+  UI->>G: resume from the checkpoint
+  G->>D: approved SQL, as the user
+  D-->>G: rows become facts f1…fN
+  G->>L: write slides that cite fact IDs
+  G->>G: guardrail and numeric check
+  G->>R: render with the facts
+  R-->>U: editable .pptx and a sources slide

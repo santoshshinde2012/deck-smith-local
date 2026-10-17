@@ -1,0 +1,69 @@
+%% diagram: deployment
+%% caption: Deployment. One Compose project with three profiles: core (full stack), app (agent containers) and instabox (lean, about 4.5 GB). Host ports are on the left of each arrow label.
+flowchart TB
+  BROWSER(["Browser / curl"]):::ui
+
+  subgraph HOST["Docker Compose project: decksmith-local"]
+    subgraph APPS["Agent containers · profiles: app, instabox"]
+      UI("ui<br/>Streamlit · 8501"):::ui
+      AGENT("agent<br/>FastAPI + LangGraph · 8000<br/>non-root, read-only data"):::app
+    end
+    subgraph PLATFORM["Platform services · profiles: core, instabox"]
+      PG[("postgres<br/>Postgres 18 · 5433→5432")]:::store
+      MLF("mlflow<br/>MLflow 3 · 5001→5000"):::obs
+      PK("portkey<br/>Portkey OSS gateway · 8787"):::llm
+    end
+    subgraph COREONLY["Full stack only · profile: core"]
+      UC("unitycatalog<br/>UC OSS · 8081→8080"):::store
+      S3[("objectstore<br/>RustFS S3 · 9000, 9001")]:::store
+    end
+    subgraph VOLS["Named volumes"]
+      V1[("pg18-data")]:::store
+      V2[("mlflow-artifacts")]:::store
+      V3[("agent-out<br/>generated decks")]:::store
+      V4[("object-data")]:::store
+    end
+  end
+
+  LAKE[("./data/lakehouse.duckdb<br/>synthetic, seed 42")]:::store
+  OLLAMA("Ollama on the host<br/>optional · 11434"):::ext
+  CLOUD("Hosted providers<br/>your own key"):::ext
+
+  BROWSER -->|":8501"| UI
+  BROWSER -->|":8000 /docs"| AGENT
+  BROWSER -->|":5001 traces"| MLF
+  UI -->|"http://agent:8000"| AGENT
+  AGENT -->|checkpoints| PG
+  AGENT -->|spans| MLF
+  AGENT -->|LLM calls| PK
+  AGENT -->|"bind mount, read-only"| LAKE
+  AGENT --- V3
+  MLF -->|backend store| PG
+  MLF --- V2
+  PG --- V1
+  S3 --- V4
+  PK -.-> OLLAMA
+  PK -.-> CLOUD
+
+  subgraph LEGEND["Legend"]
+    direction LR
+    K1(["UI"]):::ui ~~~ K2("Agent"):::app ~~~ K3[("Store / volume")]:::store ~~~ K4("Gateway"):::llm ~~~ K5("Observability"):::obs ~~~ K6("External"):::ext
+  end
+
+  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
+  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
+  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
+  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
+  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
+  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
+  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
+  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
+  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
+  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
+  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E
+  style HOST fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style APPS fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style PLATFORM fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style COREONLY fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style VOLS fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style LEGEND fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4

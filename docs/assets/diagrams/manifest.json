@@ -1,0 +1,12 @@
+{
+  "agent-graph": "42114be556d97d3fe0b09f7893a36f6d1d640a33a5238808ed718cf423d30be0",
+  "composition-root": "eb0851ab2d5335fbb6b6ddf42d996affee89665c572d8a23cc1faa3698a4c9ee",
+  "deployment": "55eb17cb636efa0b6564ae80342fc1dc343a0fb9b61b1a63a0d6e0db0cd31f19",
+  "hexagonal": "72dc3f6e6abd53e9bf8f01985ab03d8c2b594bba5ded544a67db545b5ca75178",
+  "instabox-run": "de43c9d263ca62cd27f91f0ed913b364b38e94bea6ddbe8aaeb24f853aeea19d",
+  "request-sequence": "2df383fb28b0891f13bf5bf0133846761d01e51dbfbe56dcc0dfc7fb2203761b",
+  "request-to-deck": "b0ebca2b5bc363aaaf7af276395a81b3922855945e50e4e7465a1e60f05a0863",
+  "security-flow": "00c4a318c078ea8e701e9522306b243a4fd1e20b75f59159c057c718a2fa3c9a",
+  "system": "9afee42386496435092732d2e2f7068ec5add7870d13171c57f11d8d7035af37",
+  "system-context": "38c24cee44a818b1aa0f0d3103f54aafe4b2955a0a795b4ad80d730f3fe372c8"
+}

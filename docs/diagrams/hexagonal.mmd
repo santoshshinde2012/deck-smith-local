@@ -1,0 +1,91 @@
+%% diagram: hexagonal
+%% caption: Ports and adapters. The core depends only on the eight ports; each port has local and Databricks adapters, and bootstrap.py wires one per port from settings.
+flowchart TB
+  subgraph DRIVING["Interfaces"]
+    UI(["Streamlit UI"]):::ui
+    API("FastAPI<br/>/v1/decks"):::app
+    RA("ResponsesAgent<br/>/responses"):::app
+  end
+
+  subgraph CORE["Application core: no I/O, no SDKs"]
+    SVC("DeckService<br/>start · decide · get"):::core
+    GRAPH("LangGraph agent<br/>plan · approve · fetch<br/>write · check · render"):::core
+    DOM("Domain<br/>DeckSpec · Fact · integrity"):::core
+    GUARD("No-bare-numbers<br/>guardrail (446)"):::sec
+    BOOT("bootstrap.py<br/>composition root"):::app
+  end
+
+  subgraph PORTS["Ports: eight Protocols"]
+    P_ID{{"Identity<br/>Provider"}}:::port
+    P_TPL{{"Template<br/>Repository"}}:::port
+    P_CAT{{"Catalog"}}:::port
+    P_DS{{"Data<br/>Source"}}:::port
+    P_REN{{"Renderer"}}:::port
+    P_ST{{"State<br/>Store"}}:::port
+    P_TR{{"Tracer"}}:::port
+    P_LLM{{"LLM<br/>Gateway"}}:::port
+  end
+
+  subgraph LOCAL["Local adapters: laptop, CI, InstaBox"]
+    L_ID("Static tokens<br/>JWT"):::local
+    L_TPL("SQL template<br/>files"):::local
+    L_CAT("Per-user views<br/>+ UC OSS names"):::local
+    L_DS("DuckDB<br/>via sqlglot"):::local
+    L_REN("python-pptx<br/>native charts"):::local
+    L_ST("In-memory<br/>Postgres 18"):::local
+    L_TR("No-op<br/>MLflow OSS"):::local
+    L_LLM("FakeLLM<br/>Portkey OSS"):::local
+  end
+
+  subgraph DBX["Databricks adapters"]
+    D_ID("Apps<br/>on-behalf-of"):::dbx
+    D_TPL("Same template<br/>files"):::dbx
+    D_CAT("Unity Catalog<br/>row filters"):::dbx
+    D_DS("SQL Statement<br/>API"):::dbx
+    D_REN("Same<br/>renderer"):::dbx
+    D_ST("Lakebase<br/>Postgres"):::dbx
+    D_TR("Managed<br/>MLflow"):::dbx
+    D_LLM("Portkey<br/>Enterprise hybrid"):::dbx
+  end
+
+  UI -->|HTTP + bearer token| API
+  API --> SVC
+  RA --> SVC
+  BOOT -.->|builds with chosen adapters| SVC
+  SVC --> GRAPH
+  GRAPH --> DOM
+  GRAPH --> P_ID & P_TPL & P_CAT & P_DS & P_REN & P_ST & P_TR
+  GRAPH -->|writer| GUARD --> P_LLM
+
+  P_ID -.- L_ID -.- D_ID
+  P_LLM -.- L_LLM -.- D_LLM
+  P_TPL -.- L_TPL -.- D_TPL
+  P_CAT -.- L_CAT -.- D_CAT
+  P_DS -.- L_DS -.- D_DS
+  P_REN -.- L_REN -.- D_REN
+  P_ST -.- L_ST -.- D_ST
+  P_TR -.- L_TR -.- D_TR
+
+  subgraph LEGEND["Legend · solid arrow: calls · dotted line: implements"]
+    direction LR
+    K1(["UI"]):::ui ~~~ K2("API · wiring"):::app ~~~ K3("Core"):::core ~~~ K4{{"Port"}}:::port ~~~ K5("Local adapter"):::local ~~~ K6("Databricks adapter"):::dbx ~~~ K7("Guardrail"):::sec
+  end
+
+  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
+  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
+  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
+  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
+  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
+  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
+  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
+  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
+  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
+  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
+  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E
+  style DRIVING fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style CORE fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style PORTS fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style LOCAL fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style DBX fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  DBX ~~~ LEGEND
+  style LEGEND fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4

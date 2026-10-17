@@ -1,0 +1,21 @@
+%% diagram: composition-root
+%% caption: Settings choose one adapter per port; bootstrap is the only place concrete classes are built.
+flowchart LR
+  CFG("Settings<br/>DECKSMITH_* environment, validated at start-up"):::sec
+  REG("Adapter registries<br/>one factory per adapter"):::port
+  BOOT("bootstrap.build_container<br/>composition root"):::app
+  C("Container<br/>DeckService · identity · LLM · state store"):::core
+  CFG -->|selects| BOOT
+  REG -->|factories| BOOT
+  BOOT -->|builds| C
+  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
+  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
+  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
+  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
+  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
+  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
+  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
+  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
+  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
+  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
+  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E
