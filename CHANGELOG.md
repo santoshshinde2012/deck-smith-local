@@ -1,5 +1,8 @@
 # Changelog
 
+<!-- Release Please generates list markers and spacing independently of historical entries. -->
+<!-- markdownlint-disable-file MD004 MD012 -->
+
 All notable changes are listed here. The format follows Keep a Changelog, and versions follow SemVer.
 
 ## [0.2.0](https://github.com/santoshshinde2012/deck-smith-local/compare/v0.1.1...v0.2.0) (2026-10-17)
