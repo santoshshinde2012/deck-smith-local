@@ -20,6 +20,7 @@ All notable changes are listed here. The format follows Keep a Changelog, and ve
 
 ### Changed
 
+- Every GitHub Action is pinned to a full commit SHA, with the version in a comment. This clears CodeQL `actions/unpinned-tag` (alerts 6, 24–26, 199–201, 368, 369).
 - Postgres 16 → 18. The data volume is now `pg18-data` and mounted at `/var/lib/postgresql`, because Postgres 18 keeps PGDATA in a versioned subdirectory. A local Postgres 16 volume (`pg-data`) is left untouched and unused; delete it with `docker volume rm decksmith-local_pg-data`.
 - GitHub Actions: checkout v7, setup-uv v7, upload-artifact v7, release-please-action v5.
 - Dependabot opens one grouped PR per ecosystem per month.
