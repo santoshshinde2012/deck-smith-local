@@ -1,6 +1,48 @@
 # Changelog
 
+<!-- Release Please generates list markers and spacing independently of historical entries. -->
+<!-- markdownlint-disable-file MD004 MD012 -->
+
 All notable changes are listed here. The format follows Keep a Changelog, and versions follow SemVer.
+
+## [0.2.0](https://github.com/santoshshinde2012/deck-smith-local/compare/v0.1.1...v0.2.0) (2026-10-17)
+
+
+### Features
+
+* best-practice hardening and InstaBox e2e (wip) ([8c331a1](https://github.com/santoshshinde2012/deck-smith-local/commit/8c331a1f3c0820f9d69fd98e3c11f5ed46529a19))
+* CI/CodeQL/supply-chain/release workflows, devcontainer, InstaBox workflow and docs, ADRs D9-D14; fix mlflow OOM on 8 GB VMs and agent out volume ([5b92524](https://github.com/santoshshinde2012/deck-smith-local/commit/5b9252458c83a98eef106c44152737d587c5f839))
+* DeckSmith local stack, LD0-LD1 (ports and adapters, LangGraph agent, renderer, seed, evals, compose, CI) ([d59fdb9](https://github.com/santoshshinde2012/deck-smith-local/commit/d59fdb9772ec20c4fc044f5305cca7d74f9b6768))
+* end-to-end best practices and InstaBox e2e profile ([cbf922c](https://github.com/santoshshinde2012/deck-smith-local/commit/cbf922c4f581c970fa1be28c68eac10dcda6ad0a))
+* try-it-in-5-minutes quickstart, scripted use case, grouped Dependabot, Postgres 18 and action bumps ([772ae20](https://github.com/santoshshinde2012/deck-smith-local/commit/772ae2015aa7bff091177b08b4a83b668c37f2bc))
+
+
+### Bug Fixes
+
+* **compose:** use the psycopg2 driver for the MLflow Postgres store ([eba40a7](https://github.com/santoshshinde2012/deck-smith-local/commit/eba40a7f740bb0708c1fb3c03c0f84139b3988b0))
+* **devcontainer:** use the base image + uv-managed Python 3.12 (python image's stale yarn apt key broke docker-in-docker) ([1b6efc5](https://github.com/santoshshinde2012/deck-smith-local/commit/1b6efc565c452fe45465695caf850a88e0b801a0))
+* **docker:** drop pip from runtime images to clear trivy HIGH findings; CodeQL Action v4 ([43216a6](https://github.com/santoshshinde2012/deck-smith-local/commit/43216a6bf095daeebde0b7089ae5ae24718e9f77))
+* **docker:** drop pip from the agent and MLflow images (trivy HIGH) ([cf8025c](https://github.com/santoshshinde2012/deck-smith-local/commit/cf8025cdd920b3dc1ca1d8a92e33231267341976))
+* **instabox:** move containerd root to /data too (Docker 29 image store filled the 16 GB system disk) ([b64d2c4](https://github.com/santoshshinde2012/deck-smith-local/commit/b64d2c45cad0e8ba6ce2d2e299955627fc141720))
+* **instabox:** recreate a .venv whose interpreter is missing (e.g. created inside the devcontainer) ([e74e5f4](https://github.com/santoshshinde2012/deck-smith-local/commit/e74e5f4080fbc6262d13912d3cb7525b589149a1))
+* **instabox:** use the user-writable /data/workspace ([41fca12](https://github.com/santoshshinde2012/deck-smith-local/commit/41fca12d0241a9eded45a646bf7ec5ca1f36fb63))
+* pool Postgres checkpointer connections (thread-safe for mlflow evaluate); ci: audit the exported lock, bump trivy/hadolint actions ([baf139f](https://github.com/santoshshinde2012/deck-smith-local/commit/baf139fc097e71495d6769a4368a18e407b9fa1c))
+* **quickstart:** list only this run's decks, labelled by user ([6d162cd](https://github.com/santoshshinde2012/deck-smith-local/commit/6d162cd0a593c3b3f0705820406e38a4bf0d42f4))
+* real-LLM path and UI behind a proxy, found on a fresh InstaBox run ([c5daa68](https://github.com/santoshshinde2012/deck-smith-local/commit/c5daa68829960d12a933a53c8d6f2edd9c533614))
+* untrack the .venv symlink; quiet apt in bootstrap ([fee8176](https://github.com/santoshshinde2012/deck-smith-local/commit/fee8176a40aaf86f2e27c1163b5951577b36ef2e))
+
+
+### Documentation
+
+* diagrams as white-background images, with a freshness check ([5bccb8b](https://github.com/santoshshinde2012/deck-smith-local/commit/5bccb8b92605944a4aada1c1753622a7cdb01ca2))
+* fresh-clone quickstart and sample output deck ([1a3789a](https://github.com/santoshshinde2012/deck-smith-local/commit/1a3789ac908426858ea10524e40a8b1dc2b71ffb))
+* InstaBox run evidence (asciinema cast, GIF, UI/MLflow/API/deck screenshots); single-PR branch notes ([ecb296e](https://github.com/santoshshinde2012/deck-smith-local/commit/ecb296eb537b380031a27a28741bc426dcb88d86))
+* public-facing README and MIT licence on main ([4bb6fb3](https://github.com/santoshshinde2012/deck-smith-local/commit/4bb6fb3ea1ec659e805ff48ee7732d70343b493f))
+* public-facing README on main ([76777a4](https://github.com/santoshshinde2012/deck-smith-local/commit/76777a4eb0af0570f755c4942c158a936872064d))
+* README with architecture up front, and diagrams in one semantic palette ([b52a5b9](https://github.com/santoshshinde2012/deck-smith-local/commit/b52a5b9a840a689e5419a9f27b4860fe306661d6))
+* **readme:** add end-to-end system architecture near the top ([4bc23d1](https://github.com/santoshshinde2012/deck-smith-local/commit/4bc23d115f3d0fbd2d1d972c33b60cece06cfd41))
+* render diagrams to images on a white canvas ([fc9332e](https://github.com/santoshshinde2012/deck-smith-local/commit/fc9332e22599e4acd7f9068d0b4ba30323f913a0))
+* rewrite README and architecture diagrams with one semantic palette ([52a57b6](https://github.com/santoshshinde2012/deck-smith-local/commit/52a57b62a914aad5cab0f9c6cb693096a7d805f3))
 
 ## [Unreleased]
 

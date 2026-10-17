@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "deck-smith-local"
-version = "0.1.1"
+version = "0.2.0"
 description = "DeckSmith on a laptop: a Databricks-shaped local stack for the PowerPoint agent (ports and adapters)."
 readme = "README.md"
 requires-python = ">=3.11"
