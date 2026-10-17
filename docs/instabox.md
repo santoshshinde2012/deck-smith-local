@@ -74,3 +74,30 @@ The workflow `instabox-e2e` (run manually) creates a VM, runs the bootstrap agai
 The workflow needs the repository secret `INSTABOX_API_KEY`, an API key with the `machines:*` scopes. Add it under **Settings → Secrets and variables → Actions**. It's never stored in the repo.
 
 The same lean profile also runs on every pull request on a GitHub runner, in the `stack-e2e` job of `ci`.
+
+## Evidence from a real run
+
+This was recorded on 17 Oct 2026 on a fresh InstaBox sandbox (4 vCPU, 8 GB), running `bootstrap.sh` on commit `e74e5f4`. Every step passed in 141 s:
+
+- offline tests: 91 passed, 3 skipped;
+- live-stack e2e: 17 tests, 0 failures, 3 skipped;
+- API smoke test and demo: ok.
+
+![Terminal recording of bootstrap.sh, played at 4x speed](evidence/instabox-bootstrap.gif)
+
+The full terminal session is in [`evidence/instabox-bootstrap.cast`](evidence/instabox-bootstrap.cast). Play it with `asciinema play docs/evidence/instabox-bootstrap.cast`.
+
+| Streamlit UI: bob's outline, waiting for approval | API docs (`/docs`) |
+| --- | --- |
+| ![Streamlit UI with a five-slide outline and Approve, Edit and Reject buttons](evidence/ui-outline.png) | ![FastAPI Swagger page listing the deck endpoints](evidence/api-docs.png) |
+| **MLflow 3: traces for the `decksmith-local` experiment** | **The generated deck, rendered with LibreOffice** |
+| ![MLflow traces list](evidence/mlflow-traces.png) | ![Five slides: title, KPIs, monthly churn trend, churn by segment, sources](evidence/deck-preview.png) |
+
+How these were made:
+
+- Playwright drove headless Chromium on the VM, against `localhost`.
+- `asciinema rec` recorded the terminal, `agg` turned it into the GIF, and LibreOffice and `pdftoppm` rendered the deck.
+
+`instabox port publish <box> 8000` also works. It gave a public `https://8000-<id>.instabox.tech` URL that answered `/healthz` (200), `/docs` (200) and an anonymous deck request (401). The URL is public and the test tokens are fixed, so unpublish it straight after use: `instabox port unpublish <box> 8000`.
+
+In this version each graph node is logged as its own short MLflow trace (for example `render`, about 43 ms), tagged with the `run_id`. They are not yet nested under a single trace per run.
