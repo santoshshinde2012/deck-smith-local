@@ -100,7 +100,7 @@ Prerequisites: Python 3.11 or later, `make` and git. [uv](https://docs.astral.sh
 
 ```bash
 git clone https://github.com/santoshshinde2012/deck-smith-local && cd deck-smith-local
-git switch feat/e2e-best-practices # until pull requests #1 and #3 are merged (see "Branches")
+git switch feat/e2e-best-practices # until pull request #3 is merged (see "Branches")
 python3 -m venv .venv && make install
 make up            # optional: Postgres, MLflow, UC OSS, Portkey, RustFS (needs about 3 GB free Docker disk)
 make seed          # data/lakehouse.duckdb, with per-user views for alice, bob and carol
@@ -170,6 +170,10 @@ curl -fsSL https://raw.githubusercontent.com/santoshshinde2012/deck-smith-local/
 
 Until #3 is merged, take the script from `feat/e2e-best-practices` and set `DECKSMITH_REF=feat/e2e-best-practices`.
 
+![bootstrap.sh on a fresh InstaBox VM](docs/evidence/instabox-bootstrap.gif)
+
+[docs/instabox.md](docs/instabox.md#evidence-from-a-real-run) has screenshots from that run: the UI, MLflow traces, the API docs and the rendered deck.
+
 ## What is tested where
 
 | Scenario | Here | How |
@@ -200,14 +204,9 @@ src/decksmith/
 tests/           unit, contract, architecture, integration, e2e
 ```
 
-## Branches and merge order
+## Branches
 
-The work lands in two stacked pull requests:
-
-1. **#1 `feat/core-local-stack` → `main`.** The agent, adapters, seed data, evals, compose stack and base CI.
-2. **#3 `feat/e2e-best-practices` → `feat/core-local-stack`.** Contract tests, a coverage gate, the error taxonomy and logging, the lock file and supply-chain checks, release automation, the devcontainer and InstaBox.
-
-Merge #1 first. Then change the base of #3 to `main` (GitHub may do this automatically when #1's branch is deleted) and merge #3. Until both are merged, `main` holds only a README that points here; use `feat/e2e-best-practices` for the latest code. #2 duplicates #3 and is not needed.
+All of the work is in one pull request, **#3 `feat/e2e-best-practices` → `main`**. It contains the agent, the adapters, seed data, evals, the compose stacks, and the best practices: contract tests, the coverage gate, the error taxonomy and logging, the lock file and supply-chain checks, release automation, the devcontainer and InstaBox. Until #3 is merged, `main` holds only a README that points here, so use `feat/e2e-best-practices`.
 
 ## Status and next steps
 

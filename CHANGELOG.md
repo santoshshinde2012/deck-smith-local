@@ -13,6 +13,7 @@ All notable changes are listed here. The format follows Keep a Changelog, and ve
 - Non-root multi-stage images, plus healthchecks and resource limits in Compose.
 - The `instabox` lean profile, `scripts/instabox/bootstrap.sh`, `scripts/smoke_api.sh`, the `instabox-e2e` workflow and the `stack-e2e` CI job.
 - A devcontainer, ADRs D9–D14, and a README walkthrough and architecture diagram.
+- InstaBox run evidence in `docs/evidence/`: an asciinema recording, a GIF, and screenshots of the UI, MLflow, the API docs and the deck.
 
 ### Changed
 
