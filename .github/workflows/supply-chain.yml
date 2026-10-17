@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix: { dockerfile: [docker/agent/Dockerfile, docker/mlflow/Dockerfile] }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: hadolint/hadolint-action@v3.5.0
         with: { dockerfile: "${{ matrix.dockerfile }}", failure-threshold: warning }
 
@@ -24,7 +24,7 @@ jobs:
           - { name: agent, context: ., file: docker/agent/Dockerfile }
           - { name: mlflow, context: docker/mlflow, file: docker/mlflow/Dockerfile }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: build
         run: docker build -t decksmith-${{ matrix.name }}:ci -f ${{ matrix.file }} ${{ matrix.context }}
       - name: SBOM (CycloneDX)
