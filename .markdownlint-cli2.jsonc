@@ -1,1 +1,10 @@
-{ "config": { "MD013": false } }
+{
+  "config": {
+    "MD013": false,
+    // Keep a Changelog repeats "Added" and "Changed" under each release.
+    "MD024": { "siblings_only": true },
+    // The README hero and its collapsible sections use a few HTML elements.
+    "MD033": { "allowed_elements": ["div", "img", "sub", "code", "a", "details", "summary", "b", "br"] }
+  },
+  "ignores": [".venv/**", "node_modules/**", "out/**", "data/**"]
+}
