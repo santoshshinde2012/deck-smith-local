@@ -26,8 +26,11 @@ DeckSmith plans the deck, waits for a person to approve the outline, fetches num
 
 - [Why](#why)
 - [Try it in 5 minutes](#try-it-in-5-minutes)
-- [The use case, step by step](#the-use-case-step-by-step)
 - [Architecture](#architecture)
+  - [System overview](#system-overview)
+  - [Ports and adapters](#ports-and-adapters)
+  - [From request to deck](#from-request-to-deck)
+- [The use case, step by step](#the-use-case-step-by-step)
 - [Features](#features)
 - [Project layout](#project-layout)
 - [Configuration](#configuration)
@@ -105,48 +108,110 @@ curl -s -o deck.pptx localhost:8000/v1/decks/<run_id>/file -H 'Authorization: Be
 
 </details>
 
-## The use case, step by step
-
-An analyst needs the quarterly churn review for the exec team, built from governed data and safe to present.
-
-1. **Ask.** Signed in as **bob** in the UI (<http://localhost:8501>), the analyst asks: *"Build the Q3 2026 customer retention review for the exec team."*
-2. **Review the plan.** The agent proposes five slides: title, headline KPIs, monthly churn trend, churn by segment, and sources. The run pauses before any data is touched. The analyst can **Edit** ("drop the segment slide"), **Reject** or **Approve**.
-3. **Approve.** Only now does the agent run approved SQL templates, as bob.
-4. **Download.** The result is an editable `.pptx` with native charts. Every number on a slide is a fact (`f1`–`f5`), and the **Sources** slide maps each fact to its query, tables and timestamp. The API returns the same facts, and the UI lists them under the download button.
-5. **Same request, different user.** Permissions change the outcome:
-
-| User | Can see | Result |
-| --- | --- | --- |
-| **bob** | All regions | A full deck, with 6,172 active subscriptions |
-| **alice** | EU-West only | A full deck with her own numbers (2,184 active subscriptions) |
-| **carol** | Nothing | A clear refusal (`no_data`) and no deck |
-
-Users can't see each other's runs (404), and anonymous calls are rejected (401). `make e2e-usecase` checks every step against the running API and writes `out/e2e-usecase.md`.
-
-<details>
-<summary><b>Example output</b> (offline path)</summary>
-
-```text
-1. API is up                                  PASS    API up at http://localhost:8000
-2. bob asks for a churn review deck           PASS    run 57e6c445: outline s01, s02, s03, s04, s05, paused for approval
-3. bob edits the outline (human in the loop)  PASS    edit applied (s01, s02, s03, s05); still waiting for approval
-4. bob approves; data is fetched as bob       PASS    status done: 5 slides, 5 facts
-5. bob downloads an editable PPTX             PASS    out/usecase-bob.pptx (54,215 bytes, 5 slides, 2 native charts)
-6. every number traces to a fact ID           PASS    4 numbers on slides, all from facts; sources slide cites 5 fact IDs
-7. alice (EU-West only) gets her own deck     PASS    run 39a25608: status done: 5 slides, 5 facts
-8. alice's deck is consistent too             PASS    4 numbers on slides, all from facts; sources slide cites 5 fact IDs
-9. permissions change the numbers             PASS    active subscriptions: bob 6,172 (all regions) vs alice 2,184 (EU-West only)
-10. carol (no access) is refused              PASS    no_data: None of the requested data is visible to you, so no deck was produced.
-11. runs are private; auth is required        PASS    alice cannot see bob's run or file (404); anonymous request rejected (401)
-
-11/11 steps passed
-```
-
-</details>
-
 ## Architecture
 
-DeckSmith follows a hexagonal (ports and adapters) design. The application core depends only on eight small `Protocol` ports; each technology lives in an adapter, with a local and a Databricks implementation. `bootstrap.py` is the only module that imports adapters, and `tests/architecture` enforces it.
+DeckSmith is one agent with two deployments. The same code runs on a local stack (a laptop, CI or an InstaBox VM) and on Databricks; only the adapters chosen in configuration differ.
+
+### System overview
+
+```mermaid
+%% diagram: system
+%% caption: End-to-end system architecture. One agent, two deployments: a local stack for laptops, CI and InstaBox, and Databricks. Only configuration changes.
+flowchart TB
+  USER(["Analyst in a browser<br/>bob · alice · carol"]):::ui
+
+  subgraph IF["Interfaces"]
+    UI("Streamlit UI<br/>:8501"):::ui
+    API("FastAPI<br/>/v1/decks · :8000"):::app
+    RA("MLflow ResponsesAgent<br/>/responses"):::app
+  end
+
+  AGENT("LangGraph agent<br/>intake → planner<br/>→ human approval<br/>→ data_fetch → writer<br/>→ check → render"):::core
+
+  subgraph GOV["Governed data path: the LLM writes no SQL and no numbers"]
+    FR("Fact registry<br/>f1…fN with provenance"):::core
+    TPL("Approved SQL templates<br/>Databricks SQL dialect"):::core
+    CMP("SqlCompiler<br/>validated params · sqlglot"):::core
+    GR("No-bare-numbers guardrail<br/>446 · rewrite"):::sec
+    PPTX[/"Editable .pptx<br/>native charts · sources slide"/]:::store
+  end
+
+  subgraph LOCAL["Local deployment · laptop, CI, InstaBox · Docker Compose"]
+    L_UC("Per-user views<br/>+ Unity Catalog OSS"):::store
+    L_DS[("DuckDB<br/>synthetic lakehouse")]:::store
+    L_S3[("RustFS · S3 API<br/>Parquet from make publish")]:::store
+    L_ST[("Postgres 18<br/>checkpoints")]:::store
+    L_GW("Portkey OSS<br/>gateway"):::llm
+    L_TR("MLflow 3 OSS<br/>traces · golden-set eval"):::obs
+  end
+
+  subgraph DBX["Databricks deployment · same code, Databricks adapters"]
+    D_UC("Unity Catalog<br/>row filters"):::dbx
+    D_DS[("SQL warehouse<br/>Statement API, user token")]:::dbx
+    D_S3[("S3 · UC volumes")]:::dbx
+    D_ST[("Lakebase<br/>Postgres")]:::dbx
+    D_GW("Portkey Enterprise<br/>hybrid"):::dbx
+    D_TR("Managed<br/>MLflow"):::dbx
+  end
+
+  subgraph MODELS["Models"]
+    FAKE("FakeLLM<br/>in-process · CI default"):::llm
+    OLL("Ollama<br/>on the host"):::ext
+    BED("Amazon Bedrock EU<br/>eu-central-1"):::ext
+    OAI("OpenAI<br/>your own key"):::ext
+  end
+
+  USER -->|asks · approves · downloads| UI
+  UI -->|REST + bearer token| API
+  API -->|start · decide · get| AGENT
+  RA -->|same service| AGENT
+  AGENT -->|writer cites fact IDs| FR
+  FR -->|each fact comes from| TPL
+  TPL --> CMP
+  CMP -->|"resolve the user's view"| L_UC
+  CMP -->|approved SQL, as the user| L_DS
+  AGENT -->|writer prompts| GR
+  GR -->|llm=portkey| L_GW
+  GR -->|llm=fake| FAKE
+  L_GW -->|route · retry · fall back| OLL & BED & OAI
+  AGENT -->|render| PPTX
+  AGENT -.->|checkpoints| L_ST
+  AGENT -.->|one span per node| L_TR
+
+  L_UC -.- D_UC
+  L_DS -.- D_DS
+  L_S3 -.- D_S3
+  L_ST -.- D_ST
+  L_GW -.- D_GW
+  L_TR -.- D_TR
+
+  subgraph LEGEND["Legend · solid: request path · dotted arrow: state and tracing · dotted line: swapped by configuration"]
+    direction LR
+    K1(["User / UI"]):::ui ~~~ K2("API"):::app ~~~ K3("Agent core"):::core ~~~ K4("Guardrail"):::sec ~~~ K5[("Local store")]:::store ~~~ K6("Gateway / LLM"):::llm ~~~ K7("Tracing"):::obs ~~~ K8("Databricks"):::dbx ~~~ K9("External model"):::ext
+  end
+
+  classDef ui fill:#8250DF,stroke:#6639BA,stroke-width:2px,color:#FFFFFF
+  classDef app fill:#0969DA,stroke:#0550AE,stroke-width:2px,color:#FFFFFF
+  classDef core fill:#1A7F37,stroke:#116329,stroke-width:2px,color:#FFFFFF
+  classDef port fill:#FFF8C5,stroke:#9A6700,stroke-width:2px,color:#3B2300
+  classDef local fill:#DDF4FF,stroke:#0969DA,stroke-width:2px,color:#0A3069
+  classDef dbx fill:#FFF1E5,stroke:#BC4C00,stroke-width:2px,color:#762C00
+  classDef store fill:#EAEEF2,stroke:#57606A,stroke-width:2px,color:#24292F
+  classDef llm fill:#BF3989,stroke:#99286E,stroke-width:2px,color:#FFFFFF
+  classDef obs fill:#1B7C83,stroke:#0E5A60,stroke-width:2px,color:#FFFFFF
+  classDef ext fill:#57606A,stroke:#32383F,stroke-width:2px,color:#FFFFFF,stroke-dasharray:4 3
+  classDef sec fill:#FFEBE9,stroke:#CF222E,stroke-width:2px,color:#82071E
+  style IF fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style GOV fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style LOCAL fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style DBX fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style MODELS fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+  style LEGEND fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
+```
+
+A request goes from the browser through the Streamlit UI and FastAPI into the LangGraph agent, which pauses for a person's approval before it reads any data. Numbers come only from approved SQL templates run as the signed-in user; each result becomes a fact in the registry, the writer cites facts by ID, and a guardrail and an integrity check reject any number typed by the model. A dotted line joins each local service to the Databricks service that replaces it. Model calls go through the Portkey gateway to Ollama, Bedrock EU or OpenAI; in CI the in-process FakeLLM stands in for the gateway, so no keys or network are needed.
+
+### Ports and adapters
 
 ```mermaid
 %% diagram: hexagonal
@@ -241,6 +306,8 @@ flowchart TB
   style LEGEND fill:transparent,stroke:#8C959F,stroke-width:1px,stroke-dasharray:6 4
 ```
 
+The application core depends only on eight small `Protocol` ports, and every technology lives in an adapter with a local and a Databricks implementation. `bootstrap.py` is the composition root and the only module that imports adapters; `tests/architecture` enforces that rule, and `tests/contract` runs the same behavioural tests against each adapter of a port.
+
 | Colour | Meaning | Colour | Meaning |
 | --- | --- | --- | --- |
 | Purple | People and UI | Light blue | Local adapters |
@@ -249,7 +316,79 @@ flowchart TB
 | Amber | Ports | Magenta | LLM gateway and models |
 | Red | Guardrails and refusals | Teal / dark grey | Observability / external |
 
-[ARCHITECTURE.md](ARCHITECTURE.md) has the full set of diagrams in the same palette: system context, the agent graph, a request end to end, the security and permissions flow, the Compose deployment and the composition root. It also covers the layer rules, SOLID principle by principle, and how faithful each local stand-in is.
+### From request to deck
+
+```mermaid
+%% diagram: request-to-deck
+%% caption: Request to deck, compact. The full version with every port call is in ARCHITECTURE.md.
+sequenceDiagram
+  autonumber
+  box rgba(130,80,223,0.14) Client
+    actor U as Analyst
+    participant UI as UI + API
+  end
+  box rgba(26,127,55,0.12) DeckSmith
+    participant G as LangGraph agent
+  end
+  box rgba(154,103,0,0.14) Behind the ports
+    participant L as LLM gateway
+    participant D as Governed data
+    participant R as Renderer
+  end
+  U->>UI: "Build the Q3 2026 retention review"
+  UI->>G: start, as the signed-in user
+  G->>L: plan: outline and template IDs
+  G-->>U: outline, paused for approval
+  U->>UI: Approve (or edit, or reject)
+  UI->>G: resume from the checkpoint
+  G->>D: approved SQL, as the user
+  D-->>G: rows become facts f1…fN
+  G->>L: write slides that cite fact IDs
+  G->>G: guardrail and numeric check
+  G->>R: render with the facts
+  R-->>U: editable .pptx and a sources slide
+```
+
+The run is checkpointed while it waits for approval, so any process can resume it. If the user can see none of the requested data, the run stops with `no_data` and no deck is built. The [full sequence](ARCHITECTURE.md#a-request-end-to-end), the [agent graph](ARCHITECTURE.md#the-agent-graph), the [security flow](ARCHITECTURE.md#security-and-permissions) and the [Compose deployment](ARCHITECTURE.md#deployment) are in [ARCHITECTURE.md](ARCHITECTURE.md), all in the same palette.
+
+## The use case, step by step
+
+An analyst needs the quarterly churn review for the exec team, built from governed data and safe to present.
+
+1. **Ask.** Signed in as **bob** in the UI (<http://localhost:8501>), the analyst asks: *"Build the Q3 2026 customer retention review for the exec team."*
+2. **Review the plan.** The agent proposes five slides: title, headline KPIs, monthly churn trend, churn by segment, and sources. The run pauses before any data is touched. The analyst can **Edit** ("drop the segment slide"), **Reject** or **Approve**.
+3. **Approve.** Only now does the agent run approved SQL templates, as bob.
+4. **Download.** The result is an editable `.pptx` with native charts. Every number on a slide is a fact (`f1`–`f5`), and the **Sources** slide maps each fact to its query, tables and timestamp. The API returns the same facts, and the UI lists them under the download button.
+5. **Same request, different user.** Permissions change the outcome:
+
+| User | Can see | Result |
+| --- | --- | --- |
+| **bob** | All regions | A full deck, with 6,172 active subscriptions |
+| **alice** | EU-West only | A full deck with her own numbers (2,184 active subscriptions) |
+| **carol** | Nothing | A clear refusal (`no_data`) and no deck |
+
+Users can't see each other's runs (404), and anonymous calls are rejected (401). `make e2e-usecase` checks every step against the running API and writes `out/e2e-usecase.md`.
+
+<details>
+<summary><b>Example output</b> (offline path)</summary>
+
+```text
+1. API is up                                  PASS    API up at http://localhost:8000
+2. bob asks for a churn review deck           PASS    run 57e6c445: outline s01, s02, s03, s04, s05, paused for approval
+3. bob edits the outline (human in the loop)  PASS    edit applied (s01, s02, s03, s05); still waiting for approval
+4. bob approves; data is fetched as bob       PASS    status done: 5 slides, 5 facts
+5. bob downloads an editable PPTX             PASS    out/usecase-bob.pptx (54,215 bytes, 5 slides, 2 native charts)
+6. every number traces to a fact ID           PASS    4 numbers on slides, all from facts; sources slide cites 5 fact IDs
+7. alice (EU-West only) gets her own deck     PASS    run 39a25608: status done: 5 slides, 5 facts
+8. alice's deck is consistent too             PASS    4 numbers on slides, all from facts; sources slide cites 5 fact IDs
+9. permissions change the numbers             PASS    active subscriptions: bob 6,172 (all regions) vs alice 2,184 (EU-West only)
+10. carol (no access) is refused              PASS    no_data: None of the requested data is visible to you, so no deck was produced.
+11. runs are private; auth is required        PASS    alice cannot see bob's run or file (404); anonymous request rejected (401)
+
+11/11 steps passed
+```
+
+</details>
 
 ## Features
 
