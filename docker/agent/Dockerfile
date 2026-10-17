@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # Two stages: dependencies resolved from uv.lock (reproducible), then a slim non-root runtime.
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/opt/venv
 WORKDIR /app
@@ -9,7 +9,7 @@ RUN uv sync --locked --no-dev --extra ui --no-install-project
 COPY src ./src
 RUN uv sync --locked --no-dev --extra ui --no-editable
 
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 RUN groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid app --home-dir /app app
 ENV DECKSMITH_HOME=/app PATH=/opt/venv/bin:$PATH PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /app
