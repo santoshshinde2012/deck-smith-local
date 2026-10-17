@@ -12,7 +12,7 @@ jobs:
       matrix: { python: ["3.11", "3.12", "3.13"] }
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with: { python-version: "${{ matrix.python }}", enable-cache: true }
       - name: install (locked)
         run: uv sync --locked --all-extras
@@ -43,7 +43,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with: { python-version: "3.12", enable-cache: true }
       - run: uv sync --locked --all-extras && cp .env.instabox .env
       - run: make seed PY=.venv/bin/python

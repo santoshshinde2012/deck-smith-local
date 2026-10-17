@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - run: uv build
       - run: uv sync --locked --no-dev && uvx --from cyclonedx-bom cyclonedx-py environment .venv/bin/python -o dist/sbom.cdx.json
       - env: { GH_TOKEN: "${{ github.token }}" }
