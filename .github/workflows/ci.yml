@@ -26,7 +26,7 @@ jobs:
         run: uv run python -m decksmith.seed.generate && uv run python -m decksmith.evaluation.harness
       - name: dependency audit
         run: uv export --frozen --all-extras --no-emit-project --no-hashes -o "$RUNNER_TEMP/req.txt" && uv run pip-audit --strict --progress-spinner off --disable-pip --no-deps -r "$RUNNER_TEMP/req.txt"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.python == '3.12'
         with: { name: coverage, path: coverage.xml }
 
@@ -53,6 +53,6 @@ jobs:
       - run: make demo PY=.venv/bin/python
       - if: failure()
         run: docker compose --profile instabox logs --tail 200
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: stack-e2e, path: "out/*.xml" }
