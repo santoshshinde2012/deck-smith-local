@@ -169,6 +169,7 @@ def series_colour(series: object, index: int, fallback: str) -> str:
             if found:
                 return found
     except (AttributeError, IndexError, TypeError):
+        # Marker fills are optional; fall through to the series line colour.
         pass
     try:
         return colour_of(series.format.line.color, fallback)  # type: ignore[attr-defined]
@@ -199,10 +200,14 @@ def draw_chart(image: Image.Image, shape: object, scale: float) -> None:
                 for index, (category, value, colour) in enumerate(zip(categories, values, colours, strict=True)):
                     if index == last:
                         offset, align = (-28, 8), "right"
+                        colour = INK
+                        box = {"boxstyle": "round,pad=0.2", "fc": "#FBF9F5", "ec": "none"}
                     elif index == 0:
                         offset, align = (8, 10), "left"
+                        box = None
                     else:
                         offset, align = (0, 12), "center"
+                        box = None
                     axes.annotate(
                         f"{value * 100:.1f}%" if percent else f"{value:,.0f}",
                         (category, value),
@@ -211,6 +216,7 @@ def draw_chart(image: Image.Image, shape: object, scale: float) -> None:
                         ha=align,
                         fontsize=8,
                         color=colour,
+                        bbox=box,
                     )
         elif chart.chart_type in (XL_CHART_TYPE.BAR_CLUSTERED, XL_CHART_TYPE.COLUMN_CLUSTERED):
             positions = list(range(len(categories)))

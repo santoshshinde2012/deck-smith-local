@@ -19,6 +19,8 @@ from pptx.enum.chart import (
     XL_MARKER_STYLE,
     XL_TICK_MARK,
 )
+from pptx.oxml import parse_xml
+from pptx.oxml.ns import nsdecls
 from pptx.util import Emu, Pt
 
 from decksmith.adapters.local.design.canvas import rgb
@@ -82,6 +84,16 @@ def category_labels(categories: Sequence[str]) -> list[str]:
         seen[name] = index + 1
         labels.append(name + _PRIMES[min(index, len(_PRIMES) - 1)])
     return labels
+
+
+def _label_chip(label: Any, fill: str) -> None:
+    """Back the value with the card colour so it stays readable on the highlight marker."""
+    # python-pptx exposes the label font, not its fill. The chip is the shape properties.
+    shape = label._get_or_add_dLbl().get_or_add_spPr()  # noqa: SLF001
+    for child in list(shape):
+        shape.remove(child)
+    colour = fill.removeprefix("#")
+    shape.append(parse_xml(f'<a:solidFill {nsdecls("a")}><a:srgbClr val="{colour}"/></a:solidFill>'))
 
 
 def direction_word(values: Sequence[float]) -> str:
@@ -252,12 +264,16 @@ def _paint_all(
                 label = point.data_label
                 count = len(series[index][1])
                 if chart_type == "line" and point_index == count - 1:
-                    # The last point is the one that collides: its label sits on the marker and
-                    # the category axis if it is placed above. Left of the marker stays in the plot.
+                    # Left of the marker, on a paper chip. The highlight colour is the dot;
+                    # the same colour on the dot is unreadable.
                     label.position = XL_LABEL_POSITION.LEFT
+                    _label_chip(label, theme.card)
                 elif chart_type == "line" and point_index == 0:
                     label.position = XL_LABEL_POSITION.RIGHT
                 label.font.size = Pt(12 if point_index == focus else 11)
                 label.font.bold = point_index == focus
                 label.font.name = theme.font_body
-                label.font.color.rgb = rgb(theme.highlight if point_index == focus else theme.ink)
+                # A bar label can sit in the highlight colour on paper. A line label cannot:
+                # it shares the marker, so it stays in ink on the chip.
+                colour = theme.ink if chart_type == "line" or point_index != focus else theme.highlight
+                label.font.color.rgb = rgb(colour)

@@ -4,7 +4,8 @@ import pytest
 from pptx import Presentation
 
 from decksmith.adapters.local.design.charts import category_labels
-from decksmith.adapters.local.pptx_renderer import PptxRenderer, _fill
+from decksmith.adapters.local.design.text import fill_text
+from decksmith.adapters.local.pptx_renderer import PptxRenderer
 from decksmith.domain.deckspec import DeckSpec
 from decksmith.domain.errors import GuardrailViolation
 from decksmith.domain.facts import FactRegistry
@@ -72,7 +73,7 @@ def test_renderer_refuses_series_in_text_and_missing_source_appendix(
     with pytest.raises(GuardrailViolation, match="placeholder_needs_scalar"):
         renderer.render(spec, facts, "bad-series")
     with pytest.raises(GuardrailViolation, match="needs a scalar"):
-        _fill("Churn {{fact:f3}}", facts)
+        fill_text("Churn {{fact:f3}}", facts)
     spec.slides[3].bullets = []
     spec.slides.pop()
     with pytest.raises(GuardrailViolation, match="missing_sources_appendix"):

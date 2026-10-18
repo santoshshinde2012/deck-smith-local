@@ -20,7 +20,7 @@ from pptx.util import Emu, Length
 
 from decksmith.adapters.local.design.canvas import Canvas
 from decksmith.adapters.local.design.layouts import LayoutRegistry, default_registry
-from decksmith.adapters.local.design.text import fill_text as fill_text
+from decksmith.adapters.local.design.text import fill_text
 from decksmith.adapters.local.design.theme import get_theme
 from decksmith.domain.deckspec import DeckSpec, Slide
 from decksmith.domain.errors import GuardrailViolation
@@ -31,9 +31,6 @@ from decksmith.ports.renderer import RenderedDeck
 # Exact 16:9 widescreen: 13.333... in by 7.5 in.
 WIDESCREEN = (Emu(12192000), Emu(6858000))
 FIXED_TIMESTAMP = datetime(2026, 1, 1)
-
-# Re-exported for existing tests.
-_fill = fill_text
 
 
 class PptxRenderer:

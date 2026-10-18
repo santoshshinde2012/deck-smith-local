@@ -72,12 +72,12 @@ Edward Tufte's data-ink argument ([The Visual Display of Quantitative Informatio
 | `kpi` | Headline figures | Cards, an optional sparkline and direction mark, an optional callout |
 | `chart` | A trend or a breakdown | Styled native chart, one highlighted point, short month labels |
 | `bullets` | A short argument | Accent marks, not a default bullet list |
-| `two_content` | Two groups of points | Two full-height cards with accent headers |
-| `comparison` | A side-by-side | Two full-height cards, each with an index and a header |
-| `timeline` | A sequence or a roadmap | A full-height card per step, name at the top and detail at the foot, joined by a rail |
+| `two_content` | Two groups of points | Two cards sized to their rows, with accent headers, centered under the title |
+| `comparison` | A side-by-side | Two cards sized to their rows, each with an index and a header, centered under the title |
+| `timeline` | A sequence or a roadmap | A card per step sized to the name and detail, joined by a rail, centered under the title |
 | `quote` | The request asks for a line | A full-width quotation card and an attribution |
 | `table` | Categories against one or more series | A header and one row per category, stretched to the content area, values from the series |
-| `summary` | Three takeaways | Three full-height cards, each with a large roman index and one takeaway |
+| `summary` | Three takeaways | Three cards sized to a large roman index and one takeaway, centered under the title |
 | `appendix_sources` | Always, last | One row per fact: id, label, template, tables |
 
 Footers are the same on content slides: a hairline, a one-line source list taken from fact labels, and a roman folio. The cover and section slides carry the folio only. Arabic digits on the slide face are reserved for figures that trace to a fact, so page marks never look like a metric. Speaker notes still hold the full provenance: statement id, query time, SQL, parameters and template hash. The face of the slide stays readable; the notes are the audit trail.

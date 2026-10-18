@@ -346,9 +346,12 @@ def test_every_layout_stays_on_the_slide(tmp_path: Path, facts: FactRegistry, th
     presentation = Presentation(deck.path)
     charts = [shape.chart for slide in presentation.slides for shape in slide.shapes if shape.has_chart]
     assert charts[0].value_axis.visible is False and charts[0].has_legend is False
-    highlight = get_theme(theme_id).highlight.removeprefix("#")
+    theme = get_theme(theme_id)
+    highlight = theme.highlight.removeprefix("#")
     marker = charts[0].series[0].points[2].marker.format.fill.fore_color.rgb
     assert str(marker) == highlight
+    last_label = charts[0].series[0].points[2].data_label
+    assert str(last_label.font.color.rgb) == theme.ink.removeprefix("#")
     assert charts[2].has_legend is True and charts[2].value_axis.visible is True
     texts = [shape.text_frame.text for shape in presentation.slides[-1].shapes if shape.has_text_frame]
     assert any(text.startswith("f1") for text in texts)
@@ -370,7 +373,7 @@ def test_template_sets_slide_size_and_shapes_stay_inside(
     _on_slide(deck.path)
 
 
-def test_painters_reject_the_wrong_fact_kind(tmp_path: Path, facts: FactRegistry) -> None:
+def test_painters_reject_the_wrong_fact_kind(facts: FactRegistry) -> None:
     presentation = Presentation()
     presentation.slide_width, presentation.slide_height = Emu(12_192_000), Emu(6_858_000)
     slide = presentation.slides.add_slide(presentation.slide_layouts[6])
@@ -439,7 +442,6 @@ def test_painters_reject_the_wrong_fact_kind(tmp_path: Path, facts: FactRegistry
     assert SourcesLayout().paint(blank, empty, facts, get_theme("meridian"), canvas, 3) is False
     texts = [shape.text_frame.text for shape in blank.shapes if shape.has_text_frame]
     assert "No sources" in texts
-    del tmp_path
 
 
 def test_new_layouts_reject_incomplete_or_misplaced_content(spec_dict: dict[str, object]) -> None:

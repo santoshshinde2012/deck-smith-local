@@ -33,9 +33,9 @@ class SlidePainter(Protocol):
 
     layout: str
 
-    def paint(
-        self, slide: Any, spec: Slide, facts: FactRegistry, theme: Theme, canvas: Canvas, number: int
-    ) -> bool: ...
+    def paint(self, slide: Any, spec: Slide, facts: FactRegistry, theme: Theme, canvas: Canvas, number: int) -> bool:
+        """Draw this layout. Return whether body text still overflowed at the minimum size."""
+        return False
 
 
 class LayoutRegistry:
@@ -184,11 +184,10 @@ class ComparisonLayout:
     def paint(self, slide: Any, spec: Slide, facts: FactRegistry, theme: Theme, canvas: Canvas, number: int) -> bool:
         paint_background(slide, theme.paper)
         overflow = paint_action_title(slide, fill_text(spec.title, facts), theme, canvas)
-        top = 1463040
-        height = canvas.footer_top - top - 91440
-        for index, column in enumerate(spec.columns):
+        groups = [[fill_text(bullet, facts) for bullet in column.bullets] for column in spec.columns]
+        top, height = _centered(canvas, _panel_height(max((len(group) for group in groups), default=1)))
+        for index, (column, lines) in enumerate(zip(spec.columns, groups, strict=True)):
             left, width = canvas.span(0 if index == 0 else 6, 6)
-            lines = [fill_text(bullet, facts) for bullet in column.bullets]
             overflow = overflow or _filled_panel(
                 slide,
                 fill_text(column.heading, facts),
@@ -213,11 +212,10 @@ class TimelineLayout:
         overflow = paint_action_title(slide, fill_text(spec.title, facts), theme, canvas)
         count = len(spec.milestones)
         left, total = canvas.span(0, 12)
-        top = 1554480
-        height = canvas.footer_top - top - 91440
+        top, height = _centered(canvas, 2194560)
         gap = canvas.gutter
         card_w = (total - gap * (count - 1)) // count
-        rail = top + 274320
+        rail = top + 228600
         add_shape(slide, MSO_SHAPE.RECTANGLE, left, rail, total, 27432, theme.rule)
         for index, milestone in enumerate(spec.milestones):
             card_left = left + index * (card_w + gap)
@@ -237,32 +235,29 @@ class TimelineLayout:
             )
             label = fill_text(milestone.label, facts)
             detail = fill_text(milestone.detail, facts)
-            label_fit = fit_paragraphs([label], canvas.inches(card_w - 320040), 0.8, max_pt=20, min_pt=14)
-            detail_h = min(1371600, height // 3)
-            detail_top = top + height - detail_h - 160020
-            detail_fit = fit_paragraphs(
-                [detail], canvas.inches(card_w - 320040), canvas.inches(detail_h - 91440), max_pt=16, min_pt=12
-            )
+            label_fit = fit_paragraphs([label], canvas.inches(card_w - 320040), 0.7, max_pt=20, min_pt=14)
+            detail_fit = fit_paragraphs([detail], canvas.inches(card_w - 320040), 0.8, max_pt=16, min_pt=12)
             add_text(
                 slide,
                 "\n".join(label_fit.lines),
                 card_left + 160020,
-                top + 640080,
+                top + 594360,
                 card_w - 320040,
-                731520,
+                548640,
                 font=theme.font_display,
                 size=label_fit.font_pt,
                 color=theme.ink,
                 bold=theme.display_bold,
+                anchor=MSO_ANCHOR.MIDDLE,
             )
-            add_shape(slide, MSO_SHAPE.RECTANGLE, card_left + 160020, detail_top - 137160, 365760, 27432, theme.accent)
+            add_shape(slide, MSO_SHAPE.RECTANGLE, card_left + 160020, top + 1234440, 365760, 27432, theme.accent)
             add_text(
                 slide,
                 "\n".join(detail_fit.lines),
                 card_left + 160020,
-                detail_top,
+                top + 1325880,
                 card_w - 320040,
-                detail_h,
+                685800,
                 font=theme.font_body,
                 size=detail_fit.font_pt,
                 color=theme.muted,
@@ -424,8 +419,7 @@ class SummaryLayout:
         paint_background(slide, theme.paper)
         overflow = paint_action_title(slide, fill_text(spec.title, facts), theme, canvas)
         lines = [fill_text(bullet, facts) for bullet in spec.bullets]
-        top = 1463040
-        height = canvas.footer_top - top - 91440
+        top, height = _centered(canvas, 2103120)
         spans = card_spans(len(lines) or 1)
         for (start, count), line, index in zip(spans, lines, range(1, len(lines) + 1), strict=True):
             left, width = canvas.span(start, count)
@@ -558,9 +552,8 @@ def _text_slide(
         overflow = overflow or _rows(slide, lines, theme, canvas, numbered=False)
     else:
         midpoint = (len(lines) + 1) // 2
-        top = 1463040
-        height = canvas.footer_top - top - 91440
         panels = ((0, lines[:midpoint], "The path"), (6, lines[midpoint:], "The split"))
+        top, height = _centered(canvas, _panel_height(max(len(group) for _, group, _ in panels)))
         for start, group, heading in panels:
             left, width = canvas.span(start, 6)
             overflow = overflow or _filled_panel(slide, heading, group, theme, canvas, left, top, width, height, "")
@@ -621,6 +614,19 @@ def _rows(slide: Any, lines: list[str], theme: Theme, canvas: Canvas, *, numbere
     return overflow
 
 
+def _centered(canvas: Canvas, content_h: int, *, region_top: int = 1463040) -> tuple[int, int]:
+    """Sit a content-sized block in the vertical middle of the area under the title."""
+    available = canvas.footer_top - region_top - 91440
+    height = max(1, min(available, content_h))
+    top = region_top + max(0, (available - height) // 2)
+    return top, height
+
+
+def _panel_height(line_count: int) -> int:
+    """Header plus one row per line, with a short pad. No spare band under the last row."""
+    return 502920 + max(1, line_count) * 640080 + 91440
+
+
 def _takeaway(
     slide: Any,
     line: str,
@@ -632,30 +638,31 @@ def _takeaway(
     height: int,
     index: str,
 ) -> bool:
-    """One executive takeaway: a large index, a rule, and the sentence filling the card."""
+    """One executive takeaway: a large index, a rule, and the sentence, sized to that stack."""
     add_shape(slide, MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height, theme.card, radius=0.05)
-    add_shape(slide, MSO_SHAPE.RECTANGLE, left, top, width, 54864, theme.accent)
+    add_shape(slide, MSO_SHAPE.RECTANGLE, left, top, width, 45720, theme.accent)
     add_text(
         slide,
         index,
         left + 182880,
-        top + 228600,
+        top + 137160,
         width - 365760,
-        1097280,
+        822960,
         font=theme.font_display,
-        size=44,
+        size=40,
         color=theme.accent,
         bold=True,
     )
-    add_shape(slide, MSO_SHAPE.RECTANGLE, left + 182880, top + 1371600, 457200, 27432, theme.accent)
-    fit = fit_paragraphs([line], canvas.inches(width - 365760), canvas.inches(height - 1828800), max_pt=22, min_pt=14)
+    add_shape(slide, MSO_SHAPE.RECTANGLE, left + 182880, top + 1051560, 457200, 27432, theme.accent)
+    text_h = max(457200, height - 1280160)
+    fit = fit_paragraphs([line], canvas.inches(width - 365760), canvas.inches(text_h), max_pt=20, min_pt=14)
     add_text(
         slide,
         "\n".join(fit.lines),
         left + 182880,
-        top + 1554480,
+        top + 1143000,
         width - 365760,
-        height - 1828800,
+        text_h,
         font=theme.font_body,
         size=fit.font_pt,
         color=theme.ink,
@@ -675,9 +682,9 @@ def _filled_panel(
     height: int,
     index: str,
 ) -> bool:
-    """A card that uses its full height: accent header, then one row per line."""
+    """A card sized to its header and rows. Each row shares the body, so nothing pools at the bottom."""
     add_shape(slide, MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height, theme.card, radius=0.05)
-    header_h = min(640080, height // 4)
+    header_h = min(502920, max(365760, height // 3))
     add_shape(slide, MSO_SHAPE.RECTANGLE, left, top, width, header_h, theme.accent)
     if index:
         add_text(
