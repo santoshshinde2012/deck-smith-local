@@ -1,4 +1,4 @@
-{"id": "g01", "inputs": {"request": "Build the Q3 2026 customer retention review for the exec team", "user": "bob"}, "expectations": {"status": "done", "slides": [4, 6]}}
+{"id": "g01", "inputs": {"request": "Build the quarterly customer retention review for the exec team", "user": "bob"}, "expectations": {"status": "done", "slides": [4, 6]}}
 {"id": "g02", "inputs": {"request": "Q2 2026 churn deck for the board", "user": "bob"}, "expectations": {"status": "done", "slides": [4, 6]}}
 {"id": "g03", "inputs": {"request": "Retention review Q1 2026 for my team", "user": "alice"}, "expectations": {"status": "done", "slides": [4, 6]}}
 {"id": "g04", "inputs": {"request": "Q3 2026 retention for the exec team", "user": "alice"}, "expectations": {"status": "done", "slides": [4, 6]}}

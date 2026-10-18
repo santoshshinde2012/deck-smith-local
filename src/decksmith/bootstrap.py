@@ -173,15 +173,20 @@ def build_container(
     catalog = catalog or _catalog(s, source)
     templates = _templates()
     store = state_store or STATE_STORES[s.state_store](s)
+    tracer = TRACERS[s.tracer](s)
     nodes = DeckNodes(
         llm=NoBareNumbersGuardrail(llm),
         fetcher=FactFetcher(templates, SqlCompiler(catalog, source.dialect), source),
         templates=templates,
         renderer=renderer or _renderer(s),
-        tracer=TRACERS[s.tracer](s),
+        tracer=tracer,
         interrupt=interrupt,
     )
     graph = build_graph(nodes, store.checkpointer())
     return Container(
-        settings=s, service=DeckService(graph), identity=IDENTITIES[s.identity](s), llm=llm, state_store=store
+        settings=s,
+        service=DeckService(graph, tracer),
+        identity=IDENTITIES[s.identity](s),
+        llm=llm,
+        state_store=store,
     )

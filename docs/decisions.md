@@ -46,8 +46,8 @@ Each record is short: the context, the decision, and the consequences.
 
 ## D8. MLflow 3 for tracing and evaluation
 
-- **Decision.** There is one span per node, and a golden set is scored with deterministic scorers through `mlflow.genai.evaluate`.
-- **Consequences.** Regressions in integrity, sources or slide count fail the evaluation.
+- **Decision.** Each graph invocation is one MLflow 3 trace: `draft` until the approval pause, then `decision` when the run resumes. Child spans cover the nodes, model calls, queries and checks. A golden set is scored with deterministic scorers through `mlflow.genai.evaluate`.
+- **Consequences.** The traces list shows the request and the outcome. Regressions in integrity, sources or slide count fail the evaluation. Access to the tracking store has to match the facts recorded on the trace.
 
 ## D9. Contract tests per port, and a coverage gate
 

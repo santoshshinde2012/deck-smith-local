@@ -3,7 +3,7 @@
 # Usage: scripts/smoke_api.sh [base_url]   (default http://localhost:8000). Exits non-zero on any failure.
 set -euo pipefail
 BASE="${1:-http://localhost:8000}"
-REQ='{"request":"Build the Q3 2026 customer retention review for the exec team"}'
+REQ='{"request":"Build the quarterly customer retention review for the exec team"}'
 json() { python3 -c "import sys,json; print(json.load(sys.stdin)$1)"; }
 call() { curl -fsS -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "${@:2}"; }
 

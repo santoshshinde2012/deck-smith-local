@@ -5,7 +5,7 @@ from __future__ import annotations
 from decksmith.bootstrap import build_container
 from decksmith.domain.principal import Principal
 
-REQUEST = "Build the Q3 2026 customer retention review for the exec team"
+REQUEST = "Build the quarterly customer retention review for the exec team"
 
 
 def main() -> None:

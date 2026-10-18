@@ -100,7 +100,7 @@ Drive the API directly with the fixed test tokens (`alice-token`, `bob-token`, `
 
 ```bash
 curl -s -X POST localhost:8000/v1/decks -H 'Authorization: Bearer bob-token' \
-  -H 'Content-Type: application/json' -d '{"request":"Build the Q3 2026 customer retention review for the exec team"}'
+  -H 'Content-Type: application/json' -d '{"request":"Build the quarterly customer retention review for the exec team"}'
 curl -s -X POST localhost:8000/v1/decks/<run_id>/decision -H 'Authorization: Bearer bob-token' \
   -H 'Content-Type: application/json' -d '{"action":"approve"}'
 curl -s -o deck.pptx localhost:8000/v1/decks/<run_id>/file -H 'Authorization: Bearer bob-token'
@@ -160,7 +160,7 @@ The run is checkpointed while it waits for approval. A new process can resume it
 
 An analyst needs the quarterly churn review for the exec team, built from governed data and safe to present.
 
-1. **Ask.** Signed in as **bob** in the UI (<http://localhost:8501>), the analyst asks: *"Build the Q3 2026 customer retention review for the exec team."*
+1. **Ask.** Signed in as **bob** in the UI (<http://localhost:8501>), the analyst asks: *"Build the quarterly customer retention review for the exec team."*
 2. **Review the plan.** The agent proposes five slides: title, headline KPIs, monthly churn trend, monthly churn by segment, and sources. The run pauses before any data is touched. The analyst can **Edit** ("drop the segment slide"), **Reject** or **Approve**.
 3. **Approve.** Only now does the agent run approved SQL templates, as bob.
 4. **Download.** The default outline produces five slides and two native charts. Dropping the segment slide and approving that same run produces four slides and one chart. The required **Sources** appendix lists the facts; notes include the exact SQL, bound parameters, template hash and query timestamp. The API returns the same facts. The UI previews each slide, lists each fact with its source, and offers the file for download.
@@ -172,7 +172,7 @@ An analyst needs the quarterly churn review for the exec team, built from govern
 | **alice** | Her region only | A full deck with her own numbers (2,184 active subscriptions) |
 | **carol** | Nothing | A clear refusal (`no_data`) and no deck |
 
-The Q3 review reports **weighted monthly churn and NRR**, not cumulative quarter-start cohort retention. The legacy IDs `churn_rate_quarter` and `nrr_quarter` retain their names for compatibility; template descriptions and slide labels specify the monthly aggregation. `as_of` records when the query ran, not when the source table refreshed.
+The quarterly review reports **weighted monthly churn and NRR**, not cumulative quarter-start cohort retention. The legacy IDs `churn_rate_quarter` and `nrr_quarter` retain their names for compatibility; template descriptions and slide labels specify the monthly aggregation. `as_of` records when the query ran, not when the source table refreshed.
 
 Downloaded decks are static files. Sharing one does not reapply the recipient's permissions.
 
@@ -208,7 +208,7 @@ Users can't see each other's runs (404), and anonymous calls are rejected (401).
 | Data access | Approved SQL templates in Databricks SQL, transpiled to DuckDB by sqlglot; per-user views locally, Unity Catalog on Databricks |
 | Output | Native, editable `.pptx`: a theme, a 12-column grid, action-title layouts and real charts. See [docs/design-rationale.md](docs/design-rationale.md) |
 | Interfaces | FastAPI (`/v1/decks`, OpenAPI at `/docs`), a Streamlit UI, and an MLflow `ResponsesAgent` endpoint (`/responses`) |
-| Observability | One MLflow span per node, JSON logs with `run_id` and `duration_ms`, and a stable [error taxonomy](docs/errors.md) |
+| Observability | One MLflow trace per graph invocation, with a child span per node, JSON logs with `run_id` and `duration_ms`, and a stable [error taxonomy](docs/errors.md) |
 | Evaluation | Ten golden prompts with deterministic scorers, also runnable through `mlflow.genai.evaluate` |
 | Quality | ruff, strict mypy, 90% branch coverage gate, contract tests per port, an architecture test |
 | Supply chain | `uv.lock` with `--locked` installs, Dependabot, pip-audit, CodeQL, trivy, hadolint, a CycloneDX SBOM, actions pinned to SHAs |
@@ -358,6 +358,7 @@ curl -fsSL https://raw.githubusercontent.com/santoshshinde2012/deck-smith-local/
 - Requests resolve to a principal through the identity port; anonymous calls get 401, and another user's run or file gets 404.
 - Queries run only from approved templates, with validated parameters, against the user's own views.
 - Authentication runs before ResponsesAgent tracing. Credentials are excluded from model request bodies, trace inputs and checkpoint state; the principal travels through a `ContextVar`. Regression tests inspect stored traces with dummy credentials. Provider keys are inserted into gateway configuration in memory.
+- With `DECKSMITH_TRACER=mlflow`, a deck is two traces. `draft` runs until the approval pause. `decision` is the resume (`approve`, `edit` or `reject`). The trace input is the request or the decision, the acting user's id and display name, and the run id. The trace output is an outline summary, a deck summary, or the refusal. Child spans record each node: `intake` and `planner` (`CHAIN`) with `intake.model`, `planner.model` and `writer.model` (`CHAT_MODEL`) for the messages and reply; `await_approval` (`TASK`); `data_fetch` and `query.<template_id>` (`RETRIEVER`) for the approved templates, their parameters and the facts the user is allowed to see; `writer` (`CHAIN`); `guardrail` and `check` (`GUARDRAIL`); `render` (`TOOL`); `failed` (`TASK`). Tokens, SQL text and filesystem paths are omitted. Long text is truncated. Query parameters include the approved month window, and series categories are the labels the query returned.
 - The image runs as a non-root user without pip. CI runs CodeQL and pip-audit on every pull request, and the supply-chain workflow runs hadolint, trivy and an SBOM build whenever the images or dependencies change.
 
 The local per-user views emulate row filters; they are **not** a security boundary. See [SECURITY.md](SECURITY.md) to report a vulnerability, and the [security and permissions diagram](ARCHITECTURE.md#security-and-permissions) for the full flow.

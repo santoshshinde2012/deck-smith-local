@@ -15,7 +15,7 @@ from decksmith.domain.facts import Fact, FactRegistry, FactSource
 from decksmith.domain.principal import Principal
 from decksmith.seed.generate import build
 
-REQUEST = "Build the Q3 2026 customer retention review for the exec team"
+REQUEST = "Build the quarterly customer retention review for the exec team"
 
 
 @pytest.fixture(scope="session")

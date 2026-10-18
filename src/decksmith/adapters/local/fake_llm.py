@@ -37,14 +37,29 @@ class FakeLLM:
         )
 
 
-def _quarter(text: str) -> tuple[int, int]:
+# The seeded lakehouse closes in September. A request that does not name a quarter is the
+# published review: the same July–September window, labelled without a year.
+_SEEDED_QUARTER = (2026, 3)
+_UNNAMED_PERIOD = "Last quarter"
+
+
+def _named_quarter(text: str) -> tuple[int, int] | None:
     match = re.search(r"Q([1-4])\s*(20[0-9]{2})", text, re.I)
-    return (int(match.group(2)), int(match.group(1))) if match else (2026, 3)
+    if match is None:
+        return None
+    return int(match.group(2)), int(match.group(1))
+
+
+def _quarter_of(period: str) -> tuple[int, int]:
+    match = re.fullmatch(r"(20[0-9]{2})-Q([1-4])", period)
+    if match is None:
+        return _SEEDED_QUARTER
+    return int(match.group(1)), int(match.group(2))
 
 
 def _intake(payload: dict[str, Any], _fault: str) -> str:
     text = payload["request"]
-    year, quarter = _quarter(text)
+    named = _named_quarter(text)
     deck_type = "retention_review" if re.search(r"churn|retention", text, re.I) else "kpi_review"
     audience = (
         "board"
@@ -57,7 +72,7 @@ def _intake(payload: dict[str, Any], _fault: str) -> str:
         {
             "deck_type": deck_type,
             "audience": audience,
-            "period": f"{year}-Q{quarter}",
+            "period": f"{named[0]}-Q{named[1]}" if named else _UNNAMED_PERIOD,
             "template_id": "corp_default@1.0",
         }
     )
@@ -83,7 +98,7 @@ _HINTS = {
 
 def _planner(payload: dict[str, Any], _fault: str) -> str:
     intake = payload["intake"]
-    year, quarter = int(intake["period"][:4]), int(intake["period"][-1])
+    year, quarter = _quarter_of(str(intake["period"]))
     start = date(year, 3 * quarter - 2, 1)
     end = date(year + (quarter == 4), 1 if quarter == 4 else 3 * quarter + 1, 1)
     window = {"start_month": start.isoformat(), "end_month": end.isoformat()}
