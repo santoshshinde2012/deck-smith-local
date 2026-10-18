@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
+
 from decksmith.domain.deckspec import DeckSpec
 from decksmith.domain.facts import FactRegistry
-from decksmith.domain.integrity import numeric_integrity
+from decksmith.domain.integrity import chart_consistency, numeric_integrity, outline_consistency, source_coverage
+from decksmith.domain.outline import Outline
 
 
 def status_matches(outputs: dict[str, Any], expectations: dict[str, Any]) -> bool:
@@ -14,13 +17,21 @@ def status_matches(outputs: dict[str, Any], expectations: dict[str, Any]) -> boo
 
 
 def fact_integrity(outputs: dict[str, Any], expectations: dict[str, Any]) -> bool:
-    """Every number on every slide resolves to a fact (vacuously true when no deck was expected)."""
+    """References, chart alignment, sources and approved structure pass deterministic QA."""
     if expectations.get("status", "done") != "done":
         return True
-    spec = outputs.get("spec")
-    if not spec:
+    try:
+        spec = DeckSpec.model_validate(outputs.get("spec"))
+        facts = FactRegistry.load(outputs.get("facts", []))
+        outline = Outline.model_validate(outputs.get("outline"))
+    except (ValidationError, TypeError):
         return False
-    return not numeric_integrity(DeckSpec.model_validate(spec), FactRegistry.load(outputs.get("facts", [])))
+    return not (
+        numeric_integrity(spec, facts)
+        + chart_consistency(spec, facts)
+        + source_coverage(spec)
+        + outline_consistency(spec, outline)
+    )
 
 
 def slide_count_in_range(outputs: dict[str, Any], expectations: dict[str, Any]) -> bool:
@@ -32,11 +43,11 @@ def slide_count_in_range(outputs: dict[str, Any], expectations: dict[str, Any]) 
 
 
 def sources_cited(outputs: dict[str, Any], expectations: dict[str, Any]) -> bool:
-    """Every fact used is listed on some slide's sources (the appendix lists them all)."""
+    """Every fetched fact is listed in a visible sources appendix."""
     if expectations.get("status", "done") != "done":
         return True
     spec = DeckSpec.model_validate(outputs["spec"])
-    cited = {f for s in spec.slides for f in s.sources}
+    cited = {f for s in spec.slides if s.layout == "appendix_sources" for f in s.sources}
     return {f["id"] for f in outputs.get("facts", [])} <= cited
 
 

@@ -6,20 +6,22 @@ at most six bullets and four KPIs per slide, and digits only through {{fact:id}}
 
 from __future__ import annotations
 
-from typing import Literal
+import re
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-Layout = Literal["title", "section", "kpi", "chart", "table", "bullets", "two_content", "appendix_sources"]
+Layout = Literal["title", "section", "kpi", "chart", "bullets", "two_content", "appendix_sources"]
 
 _STRICT = ConfigDict(extra="forbid")
+FACT_PATTERN = re.compile(r"\{\{fact:(f[0-9]+)\}\}")
+FactId = Annotated[str, Field(pattern=r"^f[0-9]+$")]
 
 
 class Kpi(BaseModel):
     model_config = _STRICT
     label: str = Field(min_length=1, max_length=60)
     fact_id: str = Field(pattern=r"^f[0-9]+$")
-    delta_fact_id: str | None = Field(default=None, pattern=r"^f[0-9]+$")
 
 
 class Series(BaseModel):
@@ -39,12 +41,14 @@ class Slide(BaseModel):
     slide_id: str = Field(pattern=r"^s[0-9]{2}$")
     layout: Layout
     title: str = Field(min_length=1, max_length=90)
-    subtitle: str = Field(default="", max_length=140)
-    bullets: list[str] = Field(default_factory=list, max_length=6)
-    kpis: list[Kpi] = Field(default_factory=list, max_length=4)
-    chart: Chart | None = None
+    subtitle: str = Field(default="", max_length=140, description="Supported only by title and section layouts")
+    bullets: list[str] = Field(
+        default_factory=list, max_length=6, description="Supported only by bullets, two_content and kpi layouts"
+    )
+    kpis: list[Kpi] = Field(default_factory=list, max_length=4, description="Required and supported only by kpi layout")
+    chart: Chart | None = Field(default=None, description="Required and supported only by chart layout")
     notes: str = Field(default="", max_length=1200)
-    sources: list[str] = Field(default_factory=list)
+    sources: list[FactId] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _layout_fields(self) -> Slide:
@@ -52,6 +56,14 @@ class Slide(BaseModel):
             raise ValueError(f"{self.slide_id}: kpi layout needs kpis")
         if self.layout == "chart" and self.chart is None:
             raise ValueError(f"{self.slide_id}: chart layout needs a chart")
+        if self.subtitle and self.layout not in ("title", "section"):
+            raise ValueError(f"{self.slide_id}: subtitle requires title or section layout")
+        if self.bullets and self.layout not in ("bullets", "two_content", "kpi"):
+            raise ValueError(f"{self.slide_id}: bullets require bullets, two_content or kpi layout")
+        if self.kpis and self.layout != "kpi":
+            raise ValueError(f"{self.slide_id}: kpis require kpi layout")
+        if self.chart is not None and self.layout != "chart":
+            raise ValueError(f"{self.slide_id}: chart requires chart layout")
         for bullet in self.bullets:
             if len(bullet) > 160:
                 raise ValueError(f"{self.slide_id}: bullet longer than 160 characters")
@@ -59,12 +71,21 @@ class Slide(BaseModel):
 
     def texts(self) -> list[str]:
         """Every free-text field the numeric-integrity check must scan."""
-        return [self.title, self.subtitle, *self.bullets, *(k.label for k in self.kpis)]
+        return [
+            self.title,
+            self.subtitle,
+            *self.bullets,
+            *(k.label for k in self.kpis),
+            *((s.name for s in self.chart.series) if self.chart else ()),
+            self.notes,
+        ]
 
     def fact_refs(self) -> set[str]:
-        refs = {k.fact_id for k in self.kpis} | {k.delta_fact_id for k in self.kpis if k.delta_fact_id}
+        refs = {k.fact_id for k in self.kpis}
         if self.chart:
             refs |= {s.fact_id for s in self.chart.series}
+        for text in self.texts():
+            refs.update(FACT_PATTERN.findall(text))
         return refs | set(self.sources)
 
 

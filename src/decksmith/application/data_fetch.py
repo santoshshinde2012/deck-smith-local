@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
+from datetime import date
+
 from decksmith.application.sql import SqlCompiler
-from decksmith.domain.errors import AccessDenied
 from decksmith.domain.facts import Fact, FactRegistry, FactSource
 from decksmith.domain.outline import DataRequest
 from decksmith.domain.principal import Principal
@@ -18,18 +20,25 @@ class FactFetcher:
         self._source = source
 
     def fetch(self, request: DataRequest, principal: Principal, registry: FactRegistry) -> Fact | None:
-        """Run one request; returns None when the principal's data has no rows (not an error)."""
+        """Run one request as the principal.
+
+        Returns None when the query returns no rows. Raises AccessDenied when the catalog or the
+        warehouse refuses the principal, so callers can tell a known denial from an empty result.
+        """
         template = self._templates.get(request.template_id)
-        try:
-            query = self._compiler.compile(template, request.params, principal)
-        except AccessDenied:
-            return None
+        query = self._compiler.compile(template, request.params, principal)
         result = self._source.execute(query.sql, query.params, principal)
         source = FactSource(
             template_id=template.id,
             statement_id=result.statement_id,
             tables=tuple(t.lineage for t in query.tables),
             as_of=result.executed_at,
+            sql=query.sql,
+            params={
+                name: value.isoformat() if isinstance(value, date) else str(value)
+                for name, value in query.params.items()
+            },
+            template_sha256=hashlib.sha256(template.sql.encode()).hexdigest(),
         )
         fact = _to_fact(registry.next_id(), request.label, template, result, source)
         return registry.add(fact) if fact else None

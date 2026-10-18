@@ -12,11 +12,12 @@ from pydantic import ValidationError
 from decksmith.application import prompts
 from decksmith.application.context import current_principal
 from decksmith.application.data_fetch import FactFetcher
+from decksmith.application.sql import validate_params
 from decksmith.application.state import DeckState
 from decksmith.domain.deckspec import DeckSpec
-from decksmith.domain.errors import GuardrailViolation
+from decksmith.domain.errors import AccessDenied, GuardrailViolation
 from decksmith.domain.facts import FactRegistry, format_value
-from decksmith.domain.integrity import chart_consistency, numeric_integrity
+from decksmith.domain.integrity import Issue, chart_consistency, numeric_integrity, outline_consistency, source_coverage
 from decksmith.domain.outline import Intake, Outline
 from decksmith.ports.llm import LLMGateway, LLMRequest, LLMResponse, Message, Tier
 from decksmith.ports.renderer import Renderer
@@ -87,7 +88,8 @@ class DeckNodes:
             outline = Outline.model_validate_json(response.text)
             for slide in outline.slides:
                 for request in slide.data_requests:
-                    self._templates.get(request.template_id)  # unknown templates fail here, before approval
+                    template = self._templates.get(request.template_id)
+                    validate_params(template, request.params)  # reject the entire plan before approval or queries
             return {
                 "outline": outline.model_dump(),
                 "status": "awaiting_approval",
@@ -108,14 +110,19 @@ class DeckNodes:
             principal = current_principal()
             registry = FactRegistry()
             outline = Outline.model_validate(state["outline"])
+            denied = empty = False
             for slide in outline.slides:
                 for request in slide.data_requests:
-                    self._fetcher.fetch(request, principal, registry)
-            if len(registry) == 0:
+                    try:
+                        if self._fetcher.fetch(request, principal, registry) is None:
+                            empty = True
+                    except AccessDenied:
+                        denied = True
+            if denied or empty or len(registry) == 0:
                 return {
                     "facts": [],
                     "status": "no_data",
-                    "error": "None of the requested data is visible to you, so no deck was produced.",
+                    "error": _no_data_message(denied=denied, empty=empty, partial=len(registry) > 0),
                 }
             return {"facts": registry.dump(), "status": "writing", "writer_loops": 0}
 
@@ -130,6 +137,8 @@ class DeckNodes:
                     "template_id": f.source.template_id,
                     "display": format_value(f.value, f.format, f.unit) if f.value is not None else None,
                     "categories": list(f.categories),
+                    "format": f.format,
+                    "unit": f.unit,
                 }
                 for f in registry.all()
             ]
@@ -164,13 +173,21 @@ class DeckNodes:
             return update
 
     def check(self, state: DeckState) -> DeckState:
-        """Deterministic QA gate before rendering: facts resolve, no bare digits, charts plot series."""
+        """Check references, charts, sources and the approved structure before rendering."""
         with self._tracer.span("qa", {"run_id": state["run_id"]}):
             if not state.get("spec"):
                 return {"status": "writing"}
             spec = DeckSpec.model_validate(state["spec"])
             registry = FactRegistry.load(state["facts"])
-            issues = numeric_integrity(spec, registry) + chart_consistency(spec, registry)
+            issues = (
+                numeric_integrity(spec, registry)
+                + chart_consistency(spec, registry)
+                + source_coverage(spec)
+                + outline_consistency(spec, Outline.model_validate(state["outline"]))
+            )
+            expected_template = state["intake"].get("template_id", "corp_default@1.0")
+            if spec.template_id != expected_template:
+                issues.append(Issue("deck", "template_mismatch", str(expected_template)))
             text = [f"{i.slide_id} {i.code}: {i.detail}" for i in issues]
             return {"issues": text, "status": "rendering" if not issues else "writing"}
 
@@ -201,3 +218,23 @@ class DeckNodes:
             "status": "failed",
             "error": "QA failed after the maximum number of writer loops: " + "; ".join(state.get("issues", []))[:800],
         }
+
+
+def _no_data_message(*, denied: bool, empty: bool, partial: bool) -> str:
+    """Explain a refusal without guessing: a denial is known, but an empty result has two possible causes."""
+    if not denied and not empty:
+        return "The approved outline requests no data, so no deck was produced."
+    if not partial and not empty:
+        return "None of the requested data is visible to you, so no deck was produced."
+    if not partial and not denied:
+        return (
+            "None of the requested queries returned data for you, so no deck was produced. "
+            "The period may have no data yet, or row-level policies may hide it."
+        )
+    if denied and empty:
+        cause = "Some requested data is not visible to you, and some requested queries returned no data"
+    elif denied:
+        cause = "Some requested data is not visible to you"
+    else:
+        cause = "Some requested queries returned no data"
+    return f"{cause}, so no deck was produced. Revise the request and approve a new outline."

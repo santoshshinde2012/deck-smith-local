@@ -1,5 +1,5 @@
 -- id: nrr_quarter
--- description: Net revenue retention for a period (retained MRR / starting MRR), as a ratio
+-- description: Weighted monthly net revenue retention over a period (sum of next-month retained MRR / sum of starting MRR); not period-start cohort retention
 -- kind: scalar
 -- format: pct1
 -- unit: ratio
