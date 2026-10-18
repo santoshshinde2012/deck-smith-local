@@ -10,13 +10,25 @@ import os
 import httpx
 import streamlit as st
 
+from decksmith.domain.errors import AuthenticationError
+from decksmith.interfaces.ui_auth import identity_mode, request_headers
+
 API = os.environ.get("DECKSMITH_API_URL", "http://localhost:8000")
 USERS = {"alice (EU-West only)": "alice-token", "bob (all regions)": "bob-token", "carol (no access)": "carol-token"}
 
-st.set_page_config(page_title="DeckSmith local", layout="centered")
-st.title("DeckSmith (local)")
-user = st.sidebar.selectbox("Act as", list(USERS))
-headers = {"Authorization": f"Bearer {USERS[user]}"}
+st.set_page_config(page_title="DeckSmith", layout="centered")
+st.title("DeckSmith")
+try:
+    forwarded = st.context.headers
+    mode = identity_mode(os.environ, forwarded)
+    demo_token = ""
+    if mode == "static":
+        user = st.sidebar.selectbox("Act as", list(USERS))
+        demo_token = USERS[user]
+    headers = request_headers(mode, forwarded, demo_token)
+except AuthenticationError as exc:
+    st.error(str(exc))
+    st.stop()
 client = httpx.Client(base_url=API, headers=headers, timeout=120)
 
 prompt = st.text_area("What deck do you need?", "Build the Q3 2026 customer retention review for the exec team")
