@@ -14,7 +14,7 @@ from decksmith.domain.errors import AuthenticationError
 from decksmith.interfaces.ui_auth import identity_mode, request_headers
 
 API = os.environ.get("DECKSMITH_API_URL", "http://localhost:8000")
-USERS = {"alice (EU-West only)": "alice-token", "bob (all regions)": "bob-token", "carol (no access)": "carol-token"}
+USERS = {"alice (her region only)": "alice-token", "bob (all regions)": "bob-token", "carol (no access)": "carol-token"}
 
 st.set_page_config(page_title="DeckSmith", layout="centered")
 st.title("DeckSmith")

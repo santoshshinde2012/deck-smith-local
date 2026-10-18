@@ -91,7 +91,7 @@ The agent puts the key into the gateway config in memory and sends it only to yo
 make install       # locked install with uv (pip fallback)
 make seed          # data/lakehouse.duckdb, with per-user views for alice, bob and carol
 make test          # unit, contract, architecture, integration and e2e tests (fake LLM)
-make demo          # one deck each for bob (all regions), alice (EU-West) and carol (no access)
+make demo          # one deck each for bob (all regions), alice (her region only) and carol (no access)
 make api           # http://localhost:8000/docs
 make ui            # http://localhost:8501 (in a second terminal)
 ```
@@ -122,7 +122,7 @@ DeckSmith has a working local deployment and a Databricks deployment design. Set
 </p>
 <p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/system.mmd"><code>docs/diagrams/system.mmd</code></a></sub></p>
 
-A request goes from the browser through the Streamlit UI and FastAPI into the LangGraph agent, which pauses for a person's approval before it reads any data. Numeric metrics come from approved SQL templates run as the requesting user; each result becomes a fact in the registry, and checks validate writer references, chart alignment, source coverage and the approved slide structure. A dotted line joins each local service to the Databricks service that replaces it. Model calls go through the Portkey gateway to Ollama, Bedrock EU or OpenAI; in CI the in-process FakeLLM stands in for the gateway, so no keys or network are needed.
+A request goes from the browser through the Streamlit UI and FastAPI into the LangGraph agent, which pauses for a person's approval before it reads any data. Numeric metrics come from approved SQL templates run as the requesting user; each result becomes a fact in the registry, and checks validate writer references, chart alignment, source coverage and the approved slide structure. A dotted line joins each local service to the Databricks service that replaces it. Model calls go through the Portkey gateway to Ollama, Amazon Bedrock or OpenAI; in CI the in-process FakeLLM stands in for the gateway, so no keys or network are needed.
 
 ### Ports and adapters
 
@@ -169,7 +169,7 @@ An analyst needs the quarterly churn review for the exec team, built from govern
 | User | Can see | Result |
 | --- | --- | --- |
 | **bob** | All regions | A full deck, with 6,172 active subscriptions |
-| **alice** | EU-West only | A full deck with her own numbers (2,184 active subscriptions) |
+| **alice** | Her region only | A full deck with her own numbers (2,184 active subscriptions) |
 | **carol** | Nothing | A clear refusal (`no_data`) and no deck |
 
 The Q3 review reports **weighted monthly churn and NRR**, not cumulative quarter-start cohort retention. The legacy IDs `churn_rate_quarter` and `nrr_quarter` retain their names for compatibility; template descriptions and slide labels specify the monthly aggregation. `as_of` records when the query ran, not when the source table refreshed.
@@ -188,9 +188,9 @@ Users can't see each other's runs (404), and anonymous calls are rejected (401).
 4. bob approves; data is fetched as bob       PASS    status done: 4 slides, 4 facts
 5. bob downloads an editable PPTX             PASS    out/usecase-bob.pptx (4 slides, 1 native chart)
 6. scalar and chart values match facts        PASS    4 scalar numbers and 3 chart points match facts; sources slide cites 4 fact IDs
-7. alice (EU-West only) gets her own deck     PASS    run 39a25608: status done: 5 slides, 5 facts
+7. alice (her region only) gets her own deck  PASS    run 39a25608: status done: 5 slides, 5 facts
 8. alice's deck is consistent too             PASS    4 scalar numbers and 6 chart points match facts; sources slide cites 5 fact IDs
-9. permissions change the numbers             PASS    active subscriptions: bob 6,172 (all regions) vs alice 2,184 (EU-West only)
+9. permissions change the numbers             PASS    active subscriptions: bob 6,172 (all regions) vs alice 2,184 (her region only)
 10. carol (no access) is refused              PASS    no_data: None of the requested data is visible to you, so no deck was produced.
 11. runs are private; auth is required        PASS    alice cannot see bob's run or file (404); anonymous request rejected (401)
 
@@ -319,7 +319,7 @@ make diagrams      # re-render the architecture images from docs/diagrams/*.mmd
 | E2 numeric integrity | Yes | Scalar references, chart values/categories, sources and the approved structure are checked |
 | E3 interrupt and resume | Yes / stack | Resume in a fresh container from a shared checkpointer (offline), or from Postgres (`make stack-test`) |
 | E4 request to PPTX | Yes | Full graph; QA loop recovers from invalid JSON and unknown facts, and gives up after three writes |
-| E5 permissions | Yes | alice sees EU-West only; carol gets a clean `no_data` refusal |
+| E5 permissions | Yes | alice sees her region only; carol gets a clean `no_data` refusal |
 | E6 gateway | Partly | The 446 bare-number guardrail and the rewrite are offline; retry and fallback need Portkey (`stack`) |
 | E7 golden set | Yes | Ten prompts, deterministic scorers at 100%; also runs through `mlflow.genai.evaluate` |
 | E8 cost and latency | Partly | Tokens recorded per node; latency is meaningful only with real models |
@@ -383,7 +383,7 @@ Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, the 
 
 This repository implements phases LD0–LD1 of the [test plan](docs/test-plan.md). Next:
 
-- **LD2.** Run the online profile against Bedrock EU with synthetic data, and add LLM-judge scorers.
+- **LD2.** Run the online profile against Amazon Bedrock with synthetic data, and add LLM-judge scorers.
 - **SQL parity on Delta.** `spark` and `airflow` Compose profiles.
 - **LD3.** Hybrid runs against a Databricks workspace (scenarios E9–E10).
 

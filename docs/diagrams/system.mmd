@@ -40,7 +40,7 @@ flowchart TB
   subgraph MODELS["Models"]
     FAKE("FakeLLM<br/>in-process · CI default"):::llm
     OLL("Ollama<br/>on the host"):::ext
-    BED("Amazon Bedrock EU<br/>eu-central-1"):::ext
+    BED("Amazon Bedrock<br/>optional fallback"):::ext
     OAI("OpenAI<br/>your own key"):::ext
   end
 
