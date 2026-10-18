@@ -73,6 +73,8 @@ _HINTS = {
     "comparison": "Two ways to read retention",
     "timeline": "How the review is sequenced",
     "quote": "The point of the review",
+    "table": "Where churn sits by segment",
+    "summary": "Three readings of retention",
     "split": "The story in two parts",
     "narrative": "What the figures support",
     "sources": "Sources",
@@ -165,6 +167,10 @@ def _writer(payload: dict[str, Any], fault: str) -> str:
             ]
             if not kpis:
                 continue
+            if "churn_trend_monthly" in by_template and "churn_rate_quarter" in by_template:
+                for kpi in kpis:
+                    if kpi["fact_id"] == by_template["churn_rate_quarter"]:
+                        kpi["spark_fact_id"] = by_template["churn_trend_monthly"]
             bullet = (
                 "Churn was 18% this quarter"
                 if fault == "bare_digit"
@@ -261,6 +267,35 @@ def _writer(payload: dict[str, Any], fault: str) -> str:
                         {"label": "Trend", "detail": "The monthly path"},
                         {"label": "Segments", "detail": "Where churn sits"},
                         {"label": "Sources", "detail": "How to trace a figure"},
+                    ],
+                }
+            )
+        elif layout == "table":
+            template = "churn_by_segment" if "churn_by_segment" in by_template else ""
+            if not template:
+                continue
+            slides.append(
+                {
+                    "slide_id": sid,
+                    "layout": "table",
+                    "title": _breakdown_title(_fact(payload["facts"], template), s["title_hint"]),
+                    "table": {
+                        "row_heading": "Segment",
+                        "columns": [{"heading": "Weighted churn", "fact_id": by_template[template]}],
+                    },
+                    "sources": [by_template[template]],
+                }
+            )
+        elif layout == "summary":
+            slides.append(
+                {
+                    "slide_id": sid,
+                    "layout": "summary",
+                    "title": s["title_hint"],
+                    "bullets": [
+                        "The headline figures frame the review",
+                        "The monthly path shows the direction",
+                        "The segment split shows where it sits",
                     ],
                 }
             )

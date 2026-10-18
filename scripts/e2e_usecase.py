@@ -22,6 +22,7 @@ from typing import Any
 import httpx
 from pptx import Presentation
 
+from decksmith.adapters.local.design.charts import category_labels
 from decksmith.domain.deckspec import DeckSpec
 from decksmith.domain.facts import FactRegistry, format_value
 from decksmith.domain.integrity import FACT_PATTERN, chart_consistency, numeric_integrity
@@ -120,7 +121,9 @@ class UseCase:
             if slide_spec.chart:
                 chart = charts[0]
                 expected_categories = list(registry.get(slide_spec.chart.series[0].fact_id).categories)
-                assert [category.label for category in chart.plots[0].categories] == expected_categories
+                assert [category.label for category in chart.plots[0].categories] == category_labels(
+                    expected_categories
+                )
                 assert len(chart.series) == len(slide_spec.chart.series)
                 for actual_series, series_spec in zip(chart.series, slide_spec.chart.series, strict=True):
                     fact = registry.get(series_spec.fact_id)

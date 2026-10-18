@@ -18,11 +18,12 @@ from decksmith.adapters.local.design.canvas import (
     paint_background,
     paint_footer,
 )
-from decksmith.adapters.local.design.charts import add_chart
+from decksmith.adapters.local.design.charts import add_chart, category_labels, direction_word
 from decksmith.adapters.local.design.fitting import fit_paragraphs, single_line, too_dense
+from decksmith.adapters.local.design.motifs import paint_cover
 from decksmith.adapters.local.design.text import fill_text
 from decksmith.adapters.local.design.theme import Theme
-from decksmith.domain.deckspec import Slide
+from decksmith.domain.deckspec import Kpi, Slide
 from decksmith.domain.errors import GuardrailViolation
 from decksmith.domain.facts import Fact, FactRegistry, format_value
 
@@ -56,54 +57,7 @@ class TitleLayout:
     layout = "title"
 
     def paint(self, slide: Any, spec: Slide, facts: FactRegistry, theme: Theme, canvas: Canvas, number: int) -> bool:
-        paint_background(slide, theme.cover)
-        panel = int(canvas.width * 0.58)
-        add_shape(slide, MSO_SHAPE.RECTANGLE, panel, 0, canvas.width - panel, canvas.height, theme.paper)
-        add_shape(slide, MSO_SHAPE.RECTANGLE, panel - 54864, 0, 54864, canvas.height, theme.accent)
-        _mark(slide, theme, canvas, inverse=True)
-        title = fill_text(spec.title, facts)
-        fit = fit_paragraphs([title], canvas.inches(panel - canvas.margin - 109728), 2.2, max_pt=44, min_pt=26)
-        add_text(
-            slide,
-            "\n".join(fit.lines),
-            canvas.margin,
-            int(canvas.height * 0.30),
-            panel - canvas.margin - 137160,
-            2011680,
-            font=theme.font_display,
-            size=fit.font_pt,
-            color=theme.cover_ink,
-        )
-        subtitle = fill_text(spec.subtitle, facts)
-        overflow = fit.overflow
-        if subtitle:
-            sub = fit_paragraphs([subtitle], canvas.inches(panel - canvas.margin - 109728), 0.8, max_pt=18, min_pt=14)
-            add_text(
-                slide,
-                "\n".join(sub.lines),
-                canvas.margin,
-                int(canvas.height * 0.30) + 2103120,
-                panel - canvas.margin - 137160,
-                731520,
-                font=theme.font_body,
-                size=sub.font_pt,
-                color=theme.cover_muted,
-            )
-            overflow = overflow or sub.overflow
-        _quiet_mark(slide, theme, canvas, panel)
-        add_text(
-            slide,
-            folio(number),
-            panel - canvas.margin - 640080,
-            canvas.footer_top + 45720,
-            640080,
-            292608,
-            font=theme.font_display,
-            size=13,
-            color=theme.cover_ink,
-            align=PP_ALIGN.RIGHT,
-        )
-        return overflow
+        return paint_cover(slide, spec, facts, theme, canvas, number)
 
 
 class SectionLayout:
@@ -165,49 +119,14 @@ class KpiLayout:
         paint_background(slide, theme.paper)
         overflow = paint_action_title(slide, fill_text(spec.title, facts), theme, canvas)
         spans = card_spans(len(spec.kpis))
-        top = 1463040  # 1.60 in
-        height = 2057400  # 2.25 in
+        top = 1417320  # 1.55 in
+        height = 2377440  # 2.60 in
         for (start, count), kpi in zip(spans, spec.kpis, strict=True):
             left, width = canvas.span(start, count)
-            fact = facts.get(kpi.fact_id)
-            if fact.kind != "scalar" or fact.value is None:
-                raise GuardrailViolation(f"KPI needs a scalar fact: {fact.id}")
-            add_shape(slide, MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height, theme.card, radius=0.08)
-            add_shape(slide, MSO_SHAPE.RECTANGLE, left, top, width, 36576, theme.accent)
-            value = fill_text(format_kpi(fact), facts)
-            value_fit = fit_paragraphs(
-                [value], canvas.inches(width - 182880), 0.8, max_pt=40, min_pt=22, bold=True, leading=1.0
-            )
-            add_text(
-                slide,
-                value,
-                left + 137160,
-                top + 228600,
-                width - 228600,
-                822960,
-                font=theme.font_display,
-                size=value_fit.font_pt,
-                color=theme.ink,
-                bold=True,
-                anchor=MSO_ANCHOR.MIDDLE,
-            )
-            label = fill_text(kpi.label, facts)
-            label_fit = fit_paragraphs([label], canvas.inches(width - 228600), 0.7, max_pt=14, min_pt=11)
-            add_text(
-                slide,
-                "\n".join(label_fit.lines),
-                left + 137160,
-                top + 1097280,
-                width - 228600,
-                640080,
-                font=theme.font_body,
-                size=label_fit.font_pt,
-                color=theme.muted,
-            )
-            overflow = overflow or value_fit.overflow or label_fit.overflow
+            overflow = overflow or _kpi_card(slide, kpi, facts, theme, canvas, left, top, width, height)
         lines = [fill_text(bullet, facts) for bullet in spec.bullets]
         if lines:
-            callout_top = 3794760  # 4.15 in, just under the cards
+            callout_top = top + height + 137160
             callout_height = min(1188720, canvas.footer_top - callout_top - 91440)
             if callout_height > 274320:
                 overflow = overflow or _callout(slide, lines, theme, canvas, callout_top, callout_height)
@@ -265,43 +184,23 @@ class ComparisonLayout:
     def paint(self, slide: Any, spec: Slide, facts: FactRegistry, theme: Theme, canvas: Canvas, number: int) -> bool:
         paint_background(slide, theme.paper)
         overflow = paint_action_title(slide, fill_text(spec.title, facts), theme, canvas)
-        top = 1554480
+        top = 1463040
         height = canvas.footer_top - top - 91440
         for index, column in enumerate(spec.columns):
             left, width = canvas.span(0 if index == 0 else 6, 6)
-            add_shape(slide, MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height, theme.card, radius=0.06)
-            heading = fill_text(column.heading, facts)
-            add_text(
-                slide,
-                heading,
-                left + 182880,
-                top + 182880,
-                width - 320040,
-                365760,
-                font=theme.font_display,
-                size=20,
-                color=theme.accent,
-            )
             lines = [fill_text(bullet, facts) for bullet in column.bullets]
-            body = fit_paragraphs(
-                [f"–  {line}" for line in lines],
-                canvas.inches(width - 365760),
-                canvas.inches(height - 731520),
-                max_pt=16,
-                min_pt=12,
-            )
-            add_text(
+            overflow = overflow or _filled_panel(
                 slide,
-                "\n".join(body.lines),
-                left + 182880,
-                top + 640080,
-                width - 320040,
-                height - 822960,
-                font=theme.font_body,
-                size=body.font_pt,
-                color=theme.ink,
+                fill_text(column.heading, facts),
+                lines,
+                theme,
+                canvas,
+                left,
+                top,
+                width,
+                height,
+                folio(index + 1),
             )
-            overflow = overflow or body.overflow or too_dense(lines)
         paint_footer(slide, canvas, theme, number, _sources(spec, facts))
         return overflow
 
@@ -314,47 +213,60 @@ class TimelineLayout:
         overflow = paint_action_title(slide, fill_text(spec.title, facts), theme, canvas)
         count = len(spec.milestones)
         left, total = canvas.span(0, 12)
-        axis = 3657600  # 4.0 in
-        add_shape(slide, MSO_SHAPE.RECTANGLE, left, axis, total, 13716, theme.rule)
-        slot = total // count
+        top = 1554480
+        height = canvas.footer_top - top - 91440
+        gap = canvas.gutter
+        card_w = (total - gap * (count - 1)) // count
+        rail = top + 274320
+        add_shape(slide, MSO_SHAPE.RECTANGLE, left, rail, total, 27432, theme.rule)
         for index, milestone in enumerate(spec.milestones):
-            center = left + slot * index + slot // 2
-            add_shape(
+            card_left = left + index * (card_w + gap)
+            add_shape(slide, MSO_SHAPE.ROUNDED_RECTANGLE, card_left, top, card_w, height, theme.card, radius=0.06)
+            add_shape(slide, MSO_SHAPE.OVAL, card_left + 182880, rail - 45720, 137160, 137160, theme.accent)
+            add_text(
                 slide,
-                MSO_SHAPE.OVAL,
-                center - 64008,
-                axis - 54864,
-                128016,
-                128016,
-                theme.accent if index == count - 1 else theme.ink,
+                folio(index + 1),
+                card_left + 365760,
+                top + 137160,
+                card_w - 502920,
+                411480,
+                font=theme.font_display,
+                size=22,
+                color=theme.accent,
+                bold=True,
             )
             label = fill_text(milestone.label, facts)
             detail = fill_text(milestone.detail, facts)
-            label_fit = fit_paragraphs([label], canvas.inches(slot - 91440), 0.7, max_pt=16, min_pt=12)
-            detail_fit = fit_paragraphs([detail], canvas.inches(slot - 91440), 1.1, max_pt=13, min_pt=11)
-            add_text(
-                slide,
-                "\n".join(label_fit.lines),
-                left + slot * index + 45720,
-                axis - 822960,
-                slot - 91440,
-                640080,
-                font=theme.font_display,
-                size=label_fit.font_pt,
-                color=theme.ink,
-                align=PP_ALIGN.CENTER,
+            label_fit = fit_paragraphs([label], canvas.inches(card_w - 320040), 0.8, max_pt=20, min_pt=14)
+            detail_h = min(1371600, height // 3)
+            detail_top = top + height - detail_h - 160020
+            detail_fit = fit_paragraphs(
+                [detail], canvas.inches(card_w - 320040), canvas.inches(detail_h - 91440), max_pt=16, min_pt=12
             )
             add_text(
                 slide,
+                "\n".join(label_fit.lines),
+                card_left + 160020,
+                top + 640080,
+                card_w - 320040,
+                731520,
+                font=theme.font_display,
+                size=label_fit.font_pt,
+                color=theme.ink,
+                bold=theme.display_bold,
+            )
+            add_shape(slide, MSO_SHAPE.RECTANGLE, card_left + 160020, detail_top - 137160, 365760, 27432, theme.accent)
+            add_text(
+                slide,
                 "\n".join(detail_fit.lines),
-                left + slot * index + 45720,
-                axis + 182880,
-                slot - 91440,
-                1005840,
+                card_left + 160020,
+                detail_top,
+                card_w - 320040,
+                detail_h,
                 font=theme.font_body,
                 size=detail_fit.font_pt,
                 color=theme.muted,
-                align=PP_ALIGN.CENTER,
+                anchor=MSO_ANCHOR.TOP,
             )
             overflow = overflow or label_fit.overflow or detail_fit.overflow
         paint_footer(slide, canvas, theme, number, _sources(spec, facts))
@@ -367,36 +279,158 @@ class QuoteLayout:
     def paint(self, slide: Any, spec: Slide, facts: FactRegistry, theme: Theme, canvas: Canvas, number: int) -> bool:
         paint_background(slide, theme.paper)
         overflow = paint_action_title(slide, fill_text(spec.title, facts), theme, canvas)
-        left, width = canvas.span(1, 10)
-        add_shape(slide, MSO_SHAPE.RECTANGLE, left, 1828800, 54864, 2743200, theme.accent)
+        left, width = canvas.span(0, 12)
+        top = 1463040
+        height = canvas.footer_top - top - 91440
+        add_shape(slide, MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height, theme.card, radius=0.04)
+        add_shape(slide, MSO_SHAPE.RECTANGLE, left, top, 91440, height, theme.accent)
+        add_text(
+            slide,
+            "“",
+            left + 274320,
+            top + 91440,
+            914400,
+            822960,
+            font=theme.font_display,
+            size=60,
+            color=theme.accent,
+        )
         quote = fill_text(spec.quote, facts)
-        fit = fit_paragraphs([quote], canvas.inches(width - 274320), 2.4, max_pt=32, min_pt=18)
+        fit = fit_paragraphs([quote], canvas.inches(width - 1371600), 2.2, max_pt=32, min_pt=18)
         add_text(
             slide,
             "\n".join(fit.lines),
-            left + 228600,
-            1828800,
-            width - 274320,
-            2194560,
+            left + 320040,
+            top + 914400,
+            width - 640080,
+            int(height * 0.5),
             font=theme.font_display,
             size=fit.font_pt,
             color=theme.ink,
-            anchor=MSO_ANCHOR.MIDDLE,
         )
         overflow = overflow or fit.overflow
         attribution = fill_text(spec.attribution, facts)
         if attribution:
+            add_shape(slide, MSO_SHAPE.RECTANGLE, left + 320040, top + height - 640080, 365760, 27432, theme.accent)
             add_text(
                 slide,
                 attribution,
-                left + 228600,
-                4114800,
-                width - 274320,
+                left + 777240,
+                top + height - 731520,
+                width - 1097280,
                 365760,
                 font=theme.font_body,
-                size=14,
+                size=16,
                 color=theme.muted,
             )
+        paint_footer(slide, canvas, theme, number, _sources(spec, facts))
+        return overflow
+
+
+class TableLayout:
+    layout = "table"
+
+    def paint(self, slide: Any, spec: Slide, facts: FactRegistry, theme: Theme, canvas: Canvas, number: int) -> bool:
+        paint_background(slide, theme.paper)
+        overflow = paint_action_title(slide, fill_text(spec.title, facts), theme, canvas)
+        assert spec.table is not None
+        columns = []
+        categories: tuple[str, ...] = ()
+        for column in spec.table.columns:
+            fact = facts.get(column.fact_id)
+            if fact.kind != "series":
+                raise GuardrailViolation(f"Table needs a series fact: {fact.id}")
+            categories = fact.categories
+            columns.append((fill_text(column.heading, facts), fact))
+        labels = category_labels(categories)
+        left, width = canvas.span(0, 12)
+        top = 1463040
+        available = canvas.footer_top - top - 91440
+        rows = max(1, len(labels))
+        row_h = available // (rows + 1)
+        overflow = overflow or row_h < 320040
+        label_w = int(width * 0.28)
+        value_w = (width - label_w) // max(1, len(columns))
+        add_shape(slide, MSO_SHAPE.RECTANGLE, left, top, width, row_h, theme.accent)
+        add_text(
+            slide,
+            fill_text(spec.table.row_heading, facts),
+            left + 91440,
+            top,
+            label_w - 137160,
+            row_h,
+            font=theme.font_body,
+            size=13,
+            color=theme.cover_ink,
+            bold=True,
+            anchor=MSO_ANCHOR.MIDDLE,
+        )
+        for index, (heading, _fact) in enumerate(columns):
+            add_text(
+                slide,
+                heading,
+                left + label_w + index * value_w,
+                top,
+                value_w - 91440,
+                row_h,
+                font=theme.font_body,
+                size=13,
+                color=theme.cover_ink,
+                bold=True,
+                align=PP_ALIGN.RIGHT,
+                anchor=MSO_ANCHOR.MIDDLE,
+            )
+        for row_index, label in enumerate(labels):
+            y = top + (row_index + 1) * row_h
+            if row_index % 2 == 0:
+                add_shape(slide, MSO_SHAPE.RECTANGLE, left, y, width, row_h, theme.card)
+            add_text(
+                slide,
+                label,
+                left + 91440,
+                y,
+                label_w - 137160,
+                row_h,
+                font=theme.font_body,
+                size=14,
+                color=theme.ink,
+                anchor=MSO_ANCHOR.MIDDLE,
+            )
+            for index, (_heading, fact) in enumerate(columns):
+                value = fact.values[row_index] if row_index < len(fact.values) else None
+                shown = format_value(value, fact.format, fact.unit) if value is not None else ""
+                add_text(
+                    slide,
+                    shown,
+                    left + label_w + index * value_w,
+                    y,
+                    value_w - 91440,
+                    row_h,
+                    font=theme.font_display,
+                    size=16,
+                    color=theme.ink,
+                    bold=True,
+                    align=PP_ALIGN.RIGHT,
+                    anchor=MSO_ANCHOR.MIDDLE,
+                )
+        paint_footer(slide, canvas, theme, number, _sources(spec, facts))
+        return overflow
+
+
+class SummaryLayout:
+    layout = "summary"
+
+    def paint(self, slide: Any, spec: Slide, facts: FactRegistry, theme: Theme, canvas: Canvas, number: int) -> bool:
+        paint_background(slide, theme.paper)
+        overflow = paint_action_title(slide, fill_text(spec.title, facts), theme, canvas)
+        lines = [fill_text(bullet, facts) for bullet in spec.bullets]
+        top = 1463040
+        height = canvas.footer_top - top - 91440
+        spans = card_spans(len(lines) or 1)
+        for (start, count), line, index in zip(spans, lines, range(1, len(lines) + 1), strict=True):
+            left, width = canvas.span(start, count)
+            overflow = overflow or _takeaway(slide, line, theme, canvas, left, top, width, height, folio(index))
+        overflow = overflow or too_dense(lines)
         paint_footer(slide, canvas, theme, number, _sources(spec, facts))
         return overflow
 
@@ -476,6 +510,8 @@ def default_registry() -> LayoutRegistry:
             ComparisonLayout(),
             TimelineLayout(),
             QuoteLayout(),
+            TableLayout(),
+            SummaryLayout(),
             SourcesLayout(),
         )
     )
@@ -522,18 +558,12 @@ def _text_slide(
         overflow = overflow or _rows(slide, lines, theme, canvas, numbered=False)
     else:
         midpoint = (len(lines) + 1) // 2
-        overflow = overflow or _column_block(slide, lines[:midpoint], theme, canvas, 0, 6)
-        overflow = overflow or _column_block(slide, lines[midpoint:], theme, canvas, 6, 6)
-        rule_left, _ = canvas.span(6, 6)
-        add_shape(
-            slide,
-            MSO_SHAPE.RECTANGLE,
-            rule_left - canvas.gutter // 2,
-            1645920,
-            9144,
-            canvas.footer_top - 1828800,
-            theme.rule,
-        )
+        top = 1463040
+        height = canvas.footer_top - top - 91440
+        panels = ((0, lines[:midpoint], "The path"), (6, lines[midpoint:], "The split"))
+        for start, group, heading in panels:
+            left, width = canvas.span(start, 6)
+            overflow = overflow or _filled_panel(slide, heading, group, theme, canvas, left, top, width, height, "")
     overflow = overflow or too_dense(lines)
     paint_footer(slide, canvas, theme, number, _sources(spec, facts))
     return overflow
@@ -591,23 +621,216 @@ def _rows(slide: Any, lines: list[str], theme: Theme, canvas: Canvas, *, numbere
     return overflow
 
 
-def _column_block(slide: Any, lines: list[str], theme: Theme, canvas: Canvas, start: int, count: int) -> bool:
-    if not lines:
-        return False
-    left, width = canvas.span(start, count)
-    fit = fit_paragraphs([f"–  {line}" for line in lines], canvas.inches(width - 182880), 4.6, max_pt=18, min_pt=12)
+def _takeaway(
+    slide: Any,
+    line: str,
+    theme: Theme,
+    canvas: Canvas,
+    left: int,
+    top: int,
+    width: int,
+    height: int,
+    index: str,
+) -> bool:
+    """One executive takeaway: a large index, a rule, and the sentence filling the card."""
+    add_shape(slide, MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height, theme.card, radius=0.05)
+    add_shape(slide, MSO_SHAPE.RECTANGLE, left, top, width, 54864, theme.accent)
+    add_text(
+        slide,
+        index,
+        left + 182880,
+        top + 228600,
+        width - 365760,
+        1097280,
+        font=theme.font_display,
+        size=44,
+        color=theme.accent,
+        bold=True,
+    )
+    add_shape(slide, MSO_SHAPE.RECTANGLE, left + 182880, top + 1371600, 457200, 27432, theme.accent)
+    fit = fit_paragraphs([line], canvas.inches(width - 365760), canvas.inches(height - 1828800), max_pt=22, min_pt=14)
     add_text(
         slide,
         "\n".join(fit.lines),
-        left,
-        1737360,
-        width - 182880,
-        canvas.footer_top - 1920240,
+        left + 182880,
+        top + 1554480,
+        width - 365760,
+        height - 1828800,
         font=theme.font_body,
         size=fit.font_pt,
         color=theme.ink,
     )
-    return fit.overflow
+    return fit.overflow or too_dense([line])
+
+
+def _filled_panel(
+    slide: Any,
+    heading: str,
+    lines: list[str],
+    theme: Theme,
+    canvas: Canvas,
+    left: int,
+    top: int,
+    width: int,
+    height: int,
+    index: str,
+) -> bool:
+    """A card that uses its full height: accent header, then one row per line."""
+    add_shape(slide, MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height, theme.card, radius=0.05)
+    header_h = min(640080, height // 4)
+    add_shape(slide, MSO_SHAPE.RECTANGLE, left, top, width, header_h, theme.accent)
+    if index:
+        add_text(
+            slide,
+            index,
+            left + 137160,
+            top,
+            640080,
+            header_h,
+            font=theme.font_display,
+            size=22,
+            color=theme.cover_ink,
+            bold=True,
+            anchor=MSO_ANCHOR.MIDDLE,
+        )
+    if heading:
+        add_text(
+            slide,
+            heading,
+            left + (777240 if index else 182880),
+            top,
+            width - (960120 if index else 365760),
+            header_h,
+            font=theme.font_display,
+            size=18,
+            color=theme.cover_ink,
+            bold=theme.display_bold,
+            anchor=MSO_ANCHOR.MIDDLE,
+        )
+    body_top = top + header_h
+    body_h = height - header_h
+    if not lines:
+        return False
+    row_h = body_h // len(lines)
+    overflow = False
+    for row, line in enumerate(lines):
+        fit = fit_paragraphs(
+            [line], canvas.inches(width - 411480), canvas.inches(max(row_h - 45720, 1)), max_pt=18, min_pt=12
+        )
+        y = body_top + row * row_h
+        add_shape(slide, MSO_SHAPE.OVAL, left + 182880, y + row_h // 2 - 27432, 54864, 54864, theme.accent)
+        add_text(
+            slide,
+            "\n".join(fit.lines),
+            left + 320040,
+            y,
+            width - 457200,
+            row_h,
+            font=theme.font_body,
+            size=fit.font_pt,
+            color=theme.ink,
+            anchor=MSO_ANCHOR.MIDDLE,
+        )
+        overflow = overflow or fit.overflow
+    return overflow or too_dense(lines)
+
+
+def _kpi_card(
+    slide: Any,
+    kpi: Kpi,
+    facts: FactRegistry,
+    theme: Theme,
+    canvas: Canvas,
+    left: int,
+    top: int,
+    width: int,
+    height: int,
+) -> bool:
+    fact = facts.get(kpi.fact_id)
+    if fact.kind != "scalar" or fact.value is None:
+        raise GuardrailViolation(f"KPI needs a scalar fact: {fact.id}")
+    spark = facts.get(kpi.spark_fact_id) if kpi.spark_fact_id else None
+    if spark is not None and spark.kind != "series":
+        raise GuardrailViolation(f"Sparkline needs a series fact: {spark.id}")
+    delta = facts.get(kpi.delta_fact_id) if kpi.delta_fact_id else None
+    if delta is not None and (delta.kind != "scalar" or delta.value is None):
+        raise GuardrailViolation(f"Delta needs a scalar fact: {delta.id if delta else kpi.delta_fact_id}")
+    add_shape(slide, MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height, theme.card, radius=0.08)
+    add_shape(slide, MSO_SHAPE.RECTANGLE, left, top, width, 36576, theme.accent)
+    value = format_kpi(fact)
+    value_fit = fit_paragraphs(
+        [value], canvas.inches(width - 274320), 0.7, max_pt=36, min_pt=20, bold=True, leading=1.0
+    )
+    add_text(
+        slide,
+        value,
+        left + 137160,
+        top + 137160,
+        width - 274320,
+        731520,
+        font=theme.font_display,
+        size=value_fit.font_pt,
+        color=theme.ink,
+        bold=True,
+        anchor=MSO_ANCHOR.MIDDLE,
+    )
+    label = fill_text(kpi.label, facts)
+    label_fit = fit_paragraphs([label], canvas.inches(width - 274320), 0.55, max_pt=14, min_pt=11)
+    add_text(
+        slide,
+        "\n".join(label_fit.lines),
+        left + 137160,
+        top + 868680,
+        width - 274320,
+        457200,
+        font=theme.font_body,
+        size=label_fit.font_pt,
+        color=theme.muted,
+    )
+    overflow = value_fit.overflow or label_fit.overflow
+    note = format_kpi(delta) if delta is not None and delta.value is not None else ""
+    if spark is not None:
+        _sparkline(slide, spark.values, theme, left + 137160, top + height - 640080, width - 274320, 320040)
+        if not note:
+            note = direction_word(spark.values)
+    if note:
+        add_text(
+            slide,
+            note,
+            left + 137160,
+            top + height - 1005840,
+            width - 274320,
+            320040,
+            font=theme.font_body,
+            size=12,
+            color=theme.accent,
+            bold=True,
+        )
+    return overflow
+
+
+def _sparkline(
+    slide: Any, values: tuple[float, ...], theme: Theme, left: int, top: int, width: int, height: int
+) -> None:
+    """A column sparkline drawn as shapes, so a KPI slide still has no chart frame."""
+    if len(values) < 2 or width < 2 or height < 2:
+        return
+    gap = max(1, width // (len(values) * 5))
+    bar_w = max(1, (width - gap * (len(values) - 1)) // len(values))
+    floor, peak = min(values), max(values)
+    span = peak - floor or 1.0
+    for index, value in enumerate(values):
+        bar_h = max(27432, int((value - floor) / span * (height * 0.72) + height * 0.28))
+        colour = theme.highlight if index == len(values) - 1 else theme.accent
+        add_shape(
+            slide,
+            MSO_SHAPE.RECTANGLE,
+            left + index * (bar_w + gap),
+            top + height - bar_h,
+            bar_w,
+            bar_h,
+            colour,
+        )
 
 
 def _callout(slide: Any, lines: list[str], theme: Theme, canvas: Canvas, top: int, height: int) -> bool:
@@ -628,24 +851,3 @@ def _callout(slide: Any, lines: list[str], theme: Theme, canvas: Canvas, top: in
         anchor=MSO_ANCHOR.MIDDLE,
     )
     return fit.overflow
-
-
-def _mark(slide: Any, theme: Theme, canvas: Canvas, *, inverse: bool) -> None:
-    add_text(
-        slide,
-        "DeckSmith",
-        canvas.margin,
-        canvas.height - 822960,
-        1828800,
-        274320,
-        font=theme.font_body,
-        size=12,
-        color=theme.cover_muted if inverse else theme.muted,
-    )
-
-
-def _quiet_mark(slide: Any, theme: Theme, canvas: Canvas, panel: int) -> None:
-    size = 1645920
-    left = panel + (canvas.width - panel - size) // 2
-    top = (canvas.height - size) // 2
-    add_shape(slide, MSO_SHAPE.OVAL, left, top, size, size, None, line=theme.accent, line_pt=1.25)

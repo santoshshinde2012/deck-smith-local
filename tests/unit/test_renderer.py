@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from pptx import Presentation
 
+from decksmith.adapters.local.design.charts import category_labels
 from decksmith.adapters.local.pptx_renderer import PptxRenderer, _fill
 from decksmith.domain.deckspec import DeckSpec
 from decksmith.domain.errors import GuardrailViolation
@@ -17,7 +18,10 @@ def test_renders_native_objects(renderer: PptxRenderer, spec_dict: dict[str, obj
     assert any("2.4%" in t for t in texts) and any("6,172" in t for t in texts)
     assert not any("{{fact" in t for t in texts)
     charts = [sh.chart for s in prs.slides for sh in s.shapes if sh.has_chart]
-    assert len(charts) == 1 and list(charts[0].plots[0].categories) == ["2026-07", "2026-08", "2026-09"]
+    assert len(charts) == 1
+    assert list(charts[0].plots[0].categories) == category_labels(["2026-07", "2026-08", "2026-09"])
+    visible = "\n".join(text for text in texts)
+    assert "queried" not in visible and "2026-" not in visible
     assert prs.core_properties.subject == "run_id=run1"
     assert "f3" in prs.slides[2].notes_slide.notes_text_frame.text  # provenance in speaker notes
 

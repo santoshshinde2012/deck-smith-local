@@ -13,14 +13,25 @@ from pptx import Presentation
 from pptx.util import Emu, Inches
 
 from decksmith.adapters.local.design.canvas import Canvas, folio
-from decksmith.adapters.local.design.charts import direct_labels, highlight_index, number_format
+from decksmith.adapters.local.design.charts import (
+    _headroom,
+    category_labels,
+    direct_labels,
+    direction_word,
+    highlight_index,
+    number_format,
+)
 from decksmith.adapters.local.design.fitting import fit_paragraphs, single_line, too_dense, wrap
 from decksmith.adapters.local.design.layouts import (
+    BulletsLayout,
     ChartLayout,
     KpiLayout,
     LayoutRegistry,
     SourcesLayout,
+    TableLayout,
+    TwoContentLayout,
     default_registry,
+    format_kpi,
 )
 from decksmith.adapters.local.design.theme import THEMES, contrast_ratio, get_theme, relative_luminance
 from decksmith.adapters.local.fake_llm import FakeLLM, _breakdown_title, _trend_title
@@ -29,7 +40,7 @@ from decksmith.bootstrap import Container
 from decksmith.domain.composition import layout_for, narrative_roles
 from decksmith.domain.deckspec import DeckSpec, Layout, Slide
 from decksmith.domain.errors import GuardrailViolation
-from decksmith.domain.facts import FactRegistry
+from decksmith.domain.facts import Fact, FactRegistry
 from decksmith.domain.principal import Principal
 from decksmith.ports.llm import LLMRequest, Message
 from tests.conftest import REQUEST
@@ -132,6 +143,30 @@ def test_highlight_and_label_rules() -> None:
     assert direct_labels(6, 1) and not direct_labels(7, 1) and not direct_labels(3, 2)
     assert number_format("pct1") == "0.0%"
     assert number_format("missing") == "General"
+    assert category_labels(["2026-07", "2026-08", "2026-09"]) == ["Jul", "Aug", "Sep"]
+    assert category_labels(["Enterprise", "SMB"]) == ["Enterprise", "SMB"]
+    assert category_labels(["2025-07", "2026-07"]) == ["Jul", "Jul′"]
+    assert category_labels(["2026-07", "Enterprise"]) == ["Jul", "Enterprise"]
+    assert category_labels(["2026-07"] * 5) == ["Jul", "Jul′", "Jul″", "Jul‴", "Jul‴"]
+    assert category_labels(["2026-13"]) == ["2026-13"]
+    assert direction_word([0.03, 0.02]) == "Ended lower"
+    assert direction_word([0.02, 0.03]) == "Ended higher"
+    assert direction_word([0.02, 0.02]) == "Ended flat"
+    assert direction_word([0.02]) == ""
+
+    class _Axis:
+        minimum_scale = 0.0
+        maximum_scale = 1.0
+
+    class _Chart:
+        value_axis = _Axis()
+
+    quiet_chart = _Chart()
+    _headroom(quiet_chart, "line", [("Churn", ())], label_points=True)
+    _headroom(quiet_chart, "line", [("Churn", (0.02, 0.02))], label_points=True)
+    assert quiet_chart.value_axis.minimum_scale == 0.0
+    treatments = {get_theme(theme_id).title_treatment for theme_id in THEMES}
+    assert treatments == {"split", "banner", "masthead"}
 
 
 def test_roles_follow_audience_and_wording() -> None:
@@ -142,9 +177,12 @@ def test_roles_follow_audience_and_wording() -> None:
     assert "timeline" in narrative_roles("exec", "Show the roadmap")
     assert "quote" in narrative_roles("exec", "Open with a quote")
     assert "split" in narrative_roles("exec", "Use a split view")
+    assert "table" in narrative_roles("exec", "Show a table of segments")
+    assert "summary" in narrative_roles("exec", "Add an executive summary")
     assert layout_for("scorecard") == "kpi"
+    assert layout_for("table") == "table"
     with pytest.raises(ValueError, match="unknown narrative role"):
-        layout_for("table")
+        layout_for("poster")
 
 
 def test_registry_covers_every_layout_and_can_be_replaced(
@@ -185,7 +223,12 @@ def test_every_layout_stays_on_the_slide(tmp_path: Path, facts: FactRegistry, th
             "audience": "exec",
             "period": "2026-Q3",
             "slides": [
-                {"slide_id": "s01", "layout": "title", "title": "Customer retention review"},
+                {
+                    "slide_id": "s01",
+                    "layout": "title",
+                    "title": "Customer retention review",
+                    "subtitle": "Prepared for the exec audience",
+                },
                 {
                     "slide_id": "s02",
                     "layout": "section",
@@ -202,7 +245,10 @@ def test_every_layout_stays_on_the_slide(tmp_path: Path, facts: FactRegistry, th
                     "slide_id": "s04",
                     "layout": "kpi",
                     "title": "Where retention stands",
-                    "kpis": [{"label": "Churn rate", "fact_id": "f1"}, {"label": "Active", "fact_id": "f2"}],
+                    "kpis": [
+                        {"label": "Churn rate", "fact_id": "f1", "spark_fact_id": "f3"},
+                        {"label": "Active", "fact_id": "f2", "delta_fact_id": "f1"},
+                    ],
                     "bullets": ["Churn reached {{fact:f1}}"],
                     "sources": ["f1", "f2"],
                 },
@@ -271,6 +317,22 @@ def test_every_layout_stays_on_the_slide(tmp_path: Path, facts: FactRegistry, th
                 },
                 {
                     "slide_id": "s13",
+                    "layout": "table",
+                    "title": "Churn is uneven across segments",
+                    "table": {
+                        "row_heading": "Segment",
+                        "columns": [{"heading": "Weighted churn", "fact_id": "f4"}],
+                    },
+                    "sources": ["f4"],
+                },
+                {
+                    "slide_id": "s14",
+                    "layout": "summary",
+                    "title": "Three readings of retention",
+                    "bullets": ["The headline figures", "The monthly path", "The segment split"],
+                },
+                {
+                    "slide_id": "s15",
                     "layout": "appendix_sources",
                     "title": "Sources",
                     "sources": ["f1", "f2", "f3", "f4"],
@@ -335,6 +397,43 @@ def test_painters_reject_the_wrong_fact_kind(tmp_path: Path, facts: FactRegistry
     )
     with pytest.raises(GuardrailViolation, match="series"):
         ChartLayout().paint(slide, chart, facts, get_theme("meridian"), canvas, 2)
+    table = Slide.model_validate(
+        {
+            "slide_id": "s04",
+            "layout": "table",
+            "title": "Where it sits",
+            "table": {"row_heading": "Segment", "columns": [{"heading": "Churn", "fact_id": "f1"}]},
+        }
+    )
+    with pytest.raises(GuardrailViolation, match="series"):
+        TableLayout().paint(slide, table, facts, get_theme("meridian"), canvas, 4)
+    spark = Slide.model_validate(
+        {
+            "slide_id": "s05",
+            "layout": "kpi",
+            "title": "Where retention stands",
+            "kpis": [{"label": "Churn rate", "fact_id": "f1", "spark_fact_id": "f2"}],
+        }
+    )
+    with pytest.raises(GuardrailViolation, match="Sparkline"):
+        KpiLayout().paint(slide, spark, facts, get_theme("meridian"), canvas, 5)
+    delta = Slide.model_validate(
+        {
+            "slide_id": "s06",
+            "layout": "kpi",
+            "title": "Where retention stands",
+            "kpis": [{"label": "Churn rate", "fact_id": "f1", "delta_fact_id": "f3"}],
+        }
+    )
+    with pytest.raises(GuardrailViolation, match="Delta"):
+        KpiLayout().paint(slide, delta, facts, get_theme("meridian"), canvas, 6)
+    quiet = Slide.model_validate({"slide_id": "s07", "layout": "bullets", "title": "Nothing to add"})
+    assert BulletsLayout().paint(slide, quiet, facts, get_theme("meridian"), canvas, 7) is False
+    blank_split = Slide.model_validate({"slide_id": "s08", "layout": "two_content", "title": "Two empty parts"})
+    assert TwoContentLayout().paint(slide, blank_split, facts, get_theme("meridian"), canvas, 8) is False
+    ghost = Fact.model_construct(**{**facts.get("f1").model_dump(), "value": None})
+    with pytest.raises(GuardrailViolation, match="scalar"):
+        format_kpi(ghost)
     empty = Slide.model_validate({"slide_id": "s03", "layout": "appendix_sources", "title": "Sources", "sources": []})
     blank = presentation.slides.add_slide(presentation.slide_layouts[6])
     assert SourcesLayout().paint(blank, empty, facts, get_theme("meridian"), canvas, 3) is False
@@ -365,8 +464,21 @@ def test_new_layouts_reject_incomplete_or_misplaced_content(spec_dict: dict[str,
     payload["slides"].append({"slide_id": "s06", "layout": "quote", "title": "A line", "quote": ""})
     with pytest.raises(ValueError, match="quote"):
         DeckSpec.model_validate(payload)
+    payload = spec.model_dump()
+    payload["slides"][1]["columns"] = [{"heading": "Rate", "bullets": ["Who left"]}]
+    with pytest.raises(ValueError, match="columns"):
+        DeckSpec.model_validate(payload)
+    payload = spec.model_dump()
+    payload["slides"][1]["milestones"] = [{"label": "Headline", "detail": "The figures"}]
+    with pytest.raises(ValueError, match="milestones"):
+        DeckSpec.model_validate(payload)
+    payload = spec.model_dump()
+    payload["slides"][1]["table"] = {"columns": [{"heading": "Churn", "fact_id": "f1"}]}
+    with pytest.raises(ValueError, match="table"):
+        DeckSpec.model_validate(payload)
     schema = DeckSpec.model_json_schema()
-    assert "table" not in schema["$defs"]["Slide"]["properties"]["layout"]["enum"]
+    assert "table" in schema["$defs"]["Slide"]["properties"]["layout"]["enum"]
+    assert "summary" in schema["$defs"]["Slide"]["properties"]["layout"]["enum"]
     assert "comparison" in schema["$defs"]["Slide"]["properties"]["layout"]["enum"]
 
 
@@ -439,6 +551,8 @@ def test_default_outline_ids_and_action_titles() -> None:
         ("Q3 2026 retention timeline", "timeline"),
         ("Q3 2026 retention review quote", "quote"),
         ("Q3 2026 retention split view", "two_content"),
+        ("Q3 2026 retention review with a table", "table"),
+        ("Q3 2026 retention executive summary", "summary"),
     ],
 )
 def test_richer_layouts_survive_approval(prompt: str, expected: str, container: Container, bob: Principal) -> None:

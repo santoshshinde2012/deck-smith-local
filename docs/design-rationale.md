@@ -8,7 +8,11 @@ The sample the renderer produces now, and the previous default:
 
 ![The same story before the design system, on the default Office canvas](examples/before-sample-deck.png)
 
-A wider set of layouts (agenda, comparison, timeline, quote, section divider) is in [examples/layout-gallery.png](examples/layout-gallery.png) ([pptx](examples/layout-gallery.pptx)).
+The same layouts in each theme:
+
+- [Meridian](examples/layout-gallery-meridian.png) ([pptx](examples/layout-gallery-meridian.pptx))
+- [Harbor](examples/layout-gallery-harbor.png) ([pptx](examples/layout-gallery-harbor.pptx))
+- [Graphite](examples/layout-gallery-graphite.png) ([pptx](examples/layout-gallery-graphite.pptx))
 
 ## What a professional deck is doing
 
@@ -37,9 +41,9 @@ Colour is three themes, chosen with `DECKSMITH_THEME`:
 
 | Theme | Character |
 | --- | --- |
-| `meridian` (default) | Warm paper, ink, a copper accent, a deep cover |
-| `harbor` | Cool paper, a teal cover, a clay accent |
-| `graphite` | Neutral paper, a charcoal cover, one blue accent |
+| `meridian` (default) | Warm paper, Georgia titles, a split cover, a copper column motif |
+| `harbor` | Sea-green field, Calibri titles, a horizon line, a full-width rule under each title |
+| `graphite` | Paper with a black masthead, Arial titles, a blue accent and a rust highlight, a lattice |
 
 Text on paper and on the cover meets WCAG 2.2 contrast for body copy (4.5:1). Accent and series colours meet the 3:1 non-text threshold against the paper and the card. The checks live next to the tokens and run in unit tests. References: [contrast minimum](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html), [non-text contrast](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html).
 
@@ -54,23 +58,26 @@ Edward Tufte's data-ink argument ([The Visual Display of Quantitative Informatio
 - No value axis when every point is labelled and there are at most six categories. The labels are the scale.
 - A quiet value axis and light horizontal gridlines return when there are many points or more than one series, because labels would collide.
 - One point is emphasised. On a line that is the latest category. On a bar or column it is the extreme value, and a tie keeps the earliest category. A study summarised by storytelling with data found that decluttering reads as more professional, and a deliberate focus improves recall ([declutter and focus](https://www.storytellingwithdata.com/blog/2022/2/1/swdchallenge-declutter-and-focus)).
-- Bars include zero. A line is scaled to the data, with a little headroom for the labels, so a small move stays visible.
+- Bars include zero. A line is scaled to the data, with room above and below the series, so a label can sit beside the last point instead of on the marker or the category axis.
+- A year-month category such as a fact key is drawn as a short month name. The fact itself is unchanged, and the speaker notes still carry the query.
 - Charts are native PowerPoint charts. The workbook is still in the file and the series can be edited.
 
 ## Slide types
 
 | Layout | When the planner chooses it | What the painter draws |
 | --- | --- | --- |
-| `title` | The cover | Split panel, display title, subtitle, slide number |
+| `title` | The cover | The theme's cover: split, banner, or masthead, plus its motif |
 | `section` | A board divider, or a chapter break | Full-bleed cover colour, one line, a short rule |
-| `agenda` | The request asks for an agenda | Numbered rows, one entry per line |
-| `kpi` | Headline figures | Up to four cards and an optional callout |
-| `chart` | A trend or a breakdown | Styled native chart, one highlighted point |
+| `agenda` | The request asks for an agenda | Roman indices, one entry per line |
+| `kpi` | Headline figures | Cards, an optional sparkline and direction mark, an optional callout |
+| `chart` | A trend or a breakdown | Styled native chart, one highlighted point, short month labels |
 | `bullets` | A short argument | Accent marks, not a default bullet list |
-| `two_content` | Two groups of points | Two columns and a hairline |
-| `comparison` | A side-by-side | Two cards with headings |
-| `timeline` | A sequence or a roadmap | A rule, dots, labels and detail |
-| `quote` | The request asks for a line | A display quotation and an attribution |
+| `two_content` | Two groups of points | Two full-height cards with accent headers |
+| `comparison` | A side-by-side | Two full-height cards, each with an index and a header |
+| `timeline` | A sequence or a roadmap | A full-height card per step, name at the top and detail at the foot, joined by a rail |
+| `quote` | The request asks for a line | A full-width quotation card and an attribution |
+| `table` | Categories against one or more series | A header and one row per category, stretched to the content area, values from the series |
+| `summary` | Three takeaways | Three full-height cards, each with a large roman index and one takeaway |
 | `appendix_sources` | Always, last | One row per fact: id, label, template, tables |
 
 Footers are the same on content slides: a hairline, a one-line source list taken from fact labels, and a roman folio. The cover and section slides carry the folio only. Arabic digits on the slide face are reserved for figures that trace to a fact, so page marks never look like a metric. Speaker notes still hold the full provenance: statement id, query time, SQL, parameters and template hash. The face of the slide stays readable; the notes are the audit trail.
@@ -79,7 +86,7 @@ Text is fitted before it is drawn. The renderer picks the largest size that wrap
 
 ## Variety without chaos
 
-The layouts differ in structure (a card row, a chart, a timeline, a quotation) and share the same margin, title position, accent rule, footer and type scale. That is the difference between a system and a set of templates. Tools such as [Gamma](https://gamma.app/), [Beautiful.ai](https://www.beautiful.ai/) and [Pitch](https://pitch.com/) do the same thing with constraints: the content chooses a smart layout, and the theme stops the layouts from drifting apart. DeckSmith's version of that constraint is the layout registry plus one theme object.
+The layouts differ in structure (a card row, a chart, a timeline, a quotation, a table) and share the same margin, title position, footer and type scale. The title rule and the cover change with the theme. That is the difference between a system and a set of templates. Tools such as [Gamma](https://gamma.app/), [Beautiful.ai](https://www.beautiful.ai/) and [Pitch](https://pitch.com/) do the same thing with constraints: the content chooses a smart layout, and the theme stops the layouts from drifting apart. DeckSmith's version of that constraint is the layout registry plus one theme object.
 
 ## What python-pptx can and cannot do
 
@@ -96,7 +103,7 @@ These are avoided:
 - **Rasterised charts or pictures of charts.** They are not editable and they hide the numbers.
 - **3D, pie charts, dual axes, and chartjunk borders.** They do not earn a place in this system.
 - **Embedded font files.** python-pptx does not ship a reliable font embedder. The file names Georgia and Calibri, which Office installs. A preview on a machine without those faces will substitute, which the sample image caption says.
-- **A `table` layout.** The schema still refuses it. A comparison or a source list is drawn as aligned text, not as a grid of cells.
+- **A cell-level table that the writer fills with typed digits.** The `table` layout reads series facts. Row labels and cell values are formatted by the painter. The writer names the fact, and does not type the number.
 - **Auto-fit performed by PowerPoint.** It depends on the host and breaks the content hash. Fitting is computed here, before the run is written.
 
 Other open-source generators ([PptxGenJS](https://gitbrent.github.io/PptxGenJS/), [Marp](https://marp.app/)) make the same trade: a small set of primitives, a theme, and no attempt to clone the whole of PowerPoint. The Office document model itself is [PresentationML](https://learn.microsoft.com/en-us/office/open-xml/presentation/structure-of-a-presentationml-document).

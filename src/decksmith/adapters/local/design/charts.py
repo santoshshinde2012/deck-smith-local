@@ -7,6 +7,7 @@ period on a line and the extreme value on a bar or column.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from typing import Any
 
@@ -56,6 +57,54 @@ def number_format(fmt: FactFormat | str) -> str:
     return _NUMBER_FORMATS.get(fmt, "General")
 
 
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+_YEAR_MONTH = re.compile(r"^(\d{4})-(\d{2})$")
+_PRIMES = ("", "′", "″", "‴")
+
+
+def category_labels(categories: Sequence[str]) -> list[str]:
+    """Show a year-month key as a short month name. Other labels stay as they are.
+
+    The fact keeps the original key. The axis shows Jul rather than 2026-07. If two keys share a
+    month, a prime distinguishes the later one without putting a year on the axis.
+    """
+    parsed = [_year_month(label) for label in categories]
+    if not any(parsed):
+        return list(categories)
+    labels: list[str] = []
+    seen: dict[str, int] = {}
+    for label, parts in zip(categories, parsed, strict=True):
+        if parts is None:
+            labels.append(label)
+            continue
+        name = _MONTHS[parts[1] - 1]
+        index = seen.get(name, 0)
+        seen[name] = index + 1
+        labels.append(name + _PRIMES[min(index, len(_PRIMES) - 1)])
+    return labels
+
+
+def direction_word(values: Sequence[float]) -> str:
+    """A digit-free reading of how a series ended, for a KPI delta mark."""
+    if len(values) < 2:
+        return ""
+    if values[-1] < values[0]:
+        return "Ended lower"
+    if values[-1] > values[0]:
+        return "Ended higher"
+    return "Ended flat"
+
+
+def _year_month(label: str) -> tuple[int, int] | None:
+    match = _YEAR_MONTH.fullmatch(label.strip())
+    if match is None:
+        return None
+    month = int(match.group(2))
+    if not 1 <= month <= 12:
+        return None
+    return int(match.group(1)), month
+
+
 def add_chart(
     slide: Any,
     chart_type: str,
@@ -70,7 +119,7 @@ def add_chart(
 ) -> None:
     """Draw one native chart and style it from the theme. The workbook stays editable."""
     data = CategoryChartData(number_format=number_format(fmt))  # type: ignore[no-untyped-call]
-    data.categories = list(categories)
+    data.categories = category_labels(categories)
     for name, values in series:
         data.add_series(name, list(values))  # type: ignore[no-untyped-call]
     frame = slide.shapes.add_chart(CHARTS[chart_type], Emu(left), Emu(top), Emu(width), Emu(height), data)
@@ -114,8 +163,10 @@ def _headroom(
     span = peak - floor
     if span <= 0:
         return
-    chart.value_axis.minimum_scale = floor - span * 0.45
-    chart.value_axis.maximum_scale = peak + span * 0.55
+    # Extra room under the line lifts the last point off the category axis, and room above
+    # keeps an "above" label off the plot edge.
+    chart.value_axis.minimum_scale = floor - span * 0.85
+    chart.value_axis.maximum_scale = peak + span * 0.65
 
 
 def _axes(chart: Any, theme: Theme, fmt: str, *, label_points: bool) -> None:
@@ -199,6 +250,13 @@ def _paint_all(
                 point.format.line.fill.background()
             if label_points:
                 label = point.data_label
+                count = len(series[index][1])
+                if chart_type == "line" and point_index == count - 1:
+                    # The last point is the one that collides: its label sits on the marker and
+                    # the category axis if it is placed above. Left of the marker stays in the plot.
+                    label.position = XL_LABEL_POSITION.LEFT
+                elif chart_type == "line" and point_index == 0:
+                    label.position = XL_LABEL_POSITION.RIGHT
                 label.font.size = Pt(12 if point_index == focus else 11)
                 label.font.bold = point_index == focus
                 label.font.name = theme.font_body

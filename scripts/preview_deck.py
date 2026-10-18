@@ -193,13 +193,22 @@ def draw_chart(image: Image.Image, shape: object, scale: float) -> None:
             axes.plot(categories, values, color=colours[0], linewidth=2.0, solid_capstyle="round")
             axes.scatter(categories, values, c=colours, s=28, zorder=3)
             if not chart.value_axis.visible:
-                for category, value, colour in zip(categories, values, colours, strict=True):
+                span = (max(values) - min(values)) or 1.0
+                axes.set_ylim(min(values) - span * 0.85, max(values) + span * 0.65)
+                last = len(values) - 1
+                for index, (category, value, colour) in enumerate(zip(categories, values, colours, strict=True)):
+                    if index == last:
+                        offset, align = (-28, 8), "right"
+                    elif index == 0:
+                        offset, align = (8, 10), "left"
+                    else:
+                        offset, align = (0, 12), "center"
                     axes.annotate(
                         f"{value * 100:.1f}%" if percent else f"{value:,.0f}",
                         (category, value),
                         textcoords="offset points",
-                        xytext=(0, 8),
-                        ha="center",
+                        xytext=offset,
+                        ha=align,
                         fontsize=8,
                         color=colour,
                     )

@@ -154,23 +154,34 @@ def add_text(
 
 
 def paint_action_title(slide: Any, title: str, theme: Theme, canvas: Canvas) -> bool:
-    """Left-aligned sentence title with a short accent rule. Returns whether the title overflowed."""
+    """Sentence title. The rule changes with the theme so the three systems do not share one header."""
     left, width = canvas.span(0, 12)
-    fit = fit_paragraphs([title], canvas.inches(width), 0.92, max_pt=28, min_pt=18, leading=1.15)
+    inset = 200000 if theme.title_treatment == "masthead" else 0
+    fit = fit_paragraphs(
+        [title], canvas.inches(width - inset), 0.92, max_pt=28, min_pt=18, leading=1.15, bold=theme.display_bold
+    )
+    if theme.title_treatment == "masthead":
+        add_shape(slide, MSO_SHAPE.RECTANGLE, left, 640080, 109728, 109728, theme.accent)
     add_text(
         slide,
         "\n".join(fit.lines),
-        left,
+        left + inset,
         347472,  # 0.38 in
-        width,
+        width - inset,
         841248,  # 0.92 in
         font=theme.font_display,
         size=fit.font_pt,
         color=theme.ink,
+        bold=theme.display_bold,
         anchor=MSO_ANCHOR.BOTTOM,
     )
     rule_top = 1234440  # 1.35 in
-    add_shape(slide, MSO_SHAPE.RECTANGLE, left, rule_top, 365760, 27432, theme.accent)  # 0.4 in by 0.03 in
+    if theme.title_treatment == "banner":
+        add_shape(slide, MSO_SHAPE.RECTANGLE, left, rule_top, width, 18288, theme.accent)
+    elif theme.title_treatment == "masthead":
+        add_shape(slide, MSO_SHAPE.RECTANGLE, left, rule_top, width, 27432, theme.ink)
+    else:
+        add_shape(slide, MSO_SHAPE.RECTANGLE, left, rule_top, 365760, 27432, theme.accent)
     return fit.overflow
 
 

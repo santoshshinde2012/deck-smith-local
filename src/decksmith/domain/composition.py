@@ -20,6 +20,8 @@ ROLE_TO_LAYOUT: dict[str, Layout] = {
     "comparison": "comparison",
     "timeline": "timeline",
     "quote": "quote",
+    "table": "table",
+    "summary": "summary",
     "sources": "appendix_sources",
 }
 
@@ -52,4 +54,8 @@ def narrative_roles(audience: str, request: str) -> tuple[str, ...]:
         extras.append("quote")
     if "two column" in text or "two-column" in text or "split view" in text:
         extras.append("split")
+    if " table" in text or "matrix" in text:
+        extras.append("table")
+    if "summary" in text or "takeaway" in text:
+        extras.append("summary")
     return ("cover", *body, *extras, "sources")

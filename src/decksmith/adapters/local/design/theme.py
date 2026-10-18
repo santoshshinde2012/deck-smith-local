@@ -22,8 +22,12 @@ class Theme:
     rule: str
     series: tuple[str, ...]
     highlight: str
+    band: str
     font_display: str
     font_body: str
+    title_treatment: str
+    motif: str
+    display_bold: bool
 
 
 MERIDIAN = Theme(
@@ -40,44 +44,56 @@ MERIDIAN = Theme(
     rule="#E3DCD0",
     series=("#1A3144", "#9C4221", "#3E6A74", "#7A5E24"),
     highlight="#9C4221",
+    band="#E7D3C4",
     font_display="Georgia",
     font_body="Calibri",
+    title_treatment="split",
+    motif="bars",
+    display_bold=False,
 )
 
 HARBOR = Theme(
     id="harbor",
     name="Harbor",
-    ink="#10211F",
-    muted="#3E534E",
-    paper="#F2F6F4",
-    card="#FBFEFD",
-    accent="#B6402C",
-    cover="#0E3330",
-    cover_ink="#F2F6F4",
-    cover_muted="#C5D5D0",
-    rule="#D5E2DC",
-    series=("#0E3330", "#B6402C", "#2F6F68", "#9A6230"),
-    highlight="#B6402C",
-    font_display="Georgia",
+    ink="#0C2422",
+    muted="#2C4A45",
+    paper="#E4F0EC",
+    card="#F6FBFA",
+    accent="#A83820",
+    cover="#062824",
+    cover_ink="#E4F0EC",
+    cover_muted="#B7CDC6",
+    rule="#C5DDD6",
+    series=("#062824", "#A83820", "#1F6A62", "#8C5A2B"),
+    highlight="#A83820",
+    band="#D7E8E2",
+    font_display="Calibri",
     font_body="Calibri",
+    title_treatment="banner",
+    motif="horizon",
+    display_bold=False,
 )
 
 GRAPHITE = Theme(
     id="graphite",
     name="Graphite",
-    ink="#18181B",
-    muted="#52525B",
-    paper="#F4F4F5",
+    ink="#111113",
+    muted="#3F3F46",
+    paper="#F7F7F8",
     card="#FFFFFF",
-    accent="#1E40AF",
-    cover="#18181B",
-    cover_ink="#F4F4F5",
+    accent="#1D4ED8",
+    cover="#111113",
+    cover_ink="#F7F7F8",
     cover_muted="#D4D4D8",
     rule="#E4E4E7",
-    series=("#18181B", "#1E40AF", "#52525B", "#9A3412"),
-    highlight="#1E40AF",
-    font_display="Georgia",
+    series=("#111113", "#1D4ED8", "#71717A", "#B45309"),
+    highlight="#B45309",
+    band="#E4E4E7",
+    font_display="Arial",
     font_body="Calibri",
+    title_treatment="masthead",
+    motif="lattice",
+    display_bold=True,
 )
 
 THEMES: dict[str, Theme] = {theme.id: theme for theme in (MERIDIAN, HARBOR, GRAPHITE)}

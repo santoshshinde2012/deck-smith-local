@@ -19,6 +19,7 @@ _TEXT_FIELDS = (
     "attribution",
     "heading",
     "detail",
+    "row_heading",
 )
 
 
