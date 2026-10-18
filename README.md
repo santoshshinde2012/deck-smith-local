@@ -163,7 +163,7 @@ An analyst needs the quarterly churn review for the exec team, built from govern
 1. **Ask.** Signed in as **bob** in the UI (<http://localhost:8501>), the analyst asks: *"Build the Q3 2026 customer retention review for the exec team."*
 2. **Review the plan.** The agent proposes five slides: title, headline KPIs, monthly churn trend, monthly churn by segment, and sources. The run pauses before any data is touched. The analyst can **Edit** ("drop the segment slide"), **Reject** or **Approve**.
 3. **Approve.** Only now does the agent run approved SQL templates, as bob.
-4. **Download.** The default outline produces five slides and two native charts. Dropping the segment slide and approving that same run produces four slides and one chart. The required **Sources** appendix lists the facts; notes include the exact SQL, bound parameters, template hash and query timestamp. The API returns the same facts, and the UI lists them under the download button.
+4. **Download.** The default outline produces five slides and two native charts. Dropping the segment slide and approving that same run produces four slides and one chart. The required **Sources** appendix lists the facts; notes include the exact SQL, bound parameters, template hash and query timestamp. The API returns the same facts. The UI previews each slide, lists each fact with its source, and offers the file for download.
 5. **Same request, different user.** Permissions change the outcome:
 
 | User | Can see | Result |

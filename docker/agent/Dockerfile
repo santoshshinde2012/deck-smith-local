@@ -20,7 +20,8 @@ WORKDIR /app
 COPY --from=build /opt/venv /opt/venv
 COPY --chown=app:app configs ./configs
 COPY --chown=app:app evals ./evals
-COPY --chown=app:app src/decksmith/interfaces/ui.py ./ui.py
+COPY --chown=app:app .streamlit ./.streamlit
+COPY --chown=app:app src/decksmith/interfaces/ui.py src/decksmith/interfaces/mark.png ./
 RUN mkdir -p /app/out /app/data && chown app:app /app/out /app/data
 USER app
 EXPOSE 8000 8501
