@@ -11,6 +11,7 @@ Exits non-zero if any step fails; writes out/e2e-usecase.md and out/usecase-<use
 from __future__ import annotations
 
 import argparse
+import math
 import re
 import sys
 import time
@@ -23,7 +24,7 @@ from pptx import Presentation
 
 from decksmith.domain.deckspec import DeckSpec
 from decksmith.domain.facts import FactRegistry, format_value
-from decksmith.domain.integrity import chart_consistency, numeric_integrity
+from decksmith.domain.integrity import FACT_PATTERN, chart_consistency, numeric_integrity
 
 REQUEST = "Build the Q3 2026 customer retention review for the exec team"
 NUMBER = re.compile(r"(?<![\w.])[$€£]?\d[\d,]*(?:\.\d+)?%?")
@@ -58,6 +59,7 @@ class UseCase:
         slides = [s["slide_id"] for s in view["outline"]["slides"]]
         assert len(slides) >= 3, slides
         self.ctx[f"{user}_run"] = view["run_id"]
+        self.ctx[f"{user}_outline"] = view["outline"]
         return f"run {view['run_id'][:8]}: outline {', '.join(slides)}, paused for approval"
 
     def edit_outline(self) -> str:
@@ -67,15 +69,20 @@ class UseCase:
         ).json()
         slides = [s["slide_id"] for s in view["outline"]["slides"]]
         assert view["status"] == "awaiting_approval" and "s04" not in slides, view
-        # The analyst changes their mind: start again and keep the full outline.
+        assert view["run_id"] == run and not view.get("facts") and not view.get("artifact"), view
+        self.ctx["bob_outline"] = view["outline"]
         return f"edit applied ({', '.join(slides)}); still waiting for approval"
 
     def approve(self, user: str) -> str:
-        if user == "bob":  # approve a fresh, unedited outline so the deck has all five slides
-            self.request_outline("bob")
         run = self.ctx[f"{user}_run"]
         view = self.call(user, "POST", f"/v1/decks/{run}/decision", json={"action": "approve"}).json()
         assert view["status"] == "done", view
+        assert view["run_id"] == run, "approval must resume the edited run"
+        expected = [(s["slide_id"], s["layout"]) for s in self.ctx[f"{user}_outline"]["slides"]]
+        actual = [(s["slide_id"], s["layout"]) for s in view["spec"]["slides"]]
+        assert actual == expected, (actual, expected)
+        if user == "bob":
+            assert len(actual) == 4 and all(f["source"]["template_id"] != "churn_by_segment" for f in view["facts"])
         self.ctx[f"{user}_view"] = view
         return f"status done: {view['artifact']['slide_count']} slides, {len(view['facts'])} facts"
 
@@ -90,25 +97,58 @@ class UseCase:
         assert len(deck.slides) == self.ctx[f"{user}_view"]["artifact"]["slide_count"]
         assert charts >= 1, "expected native, editable charts"
         self.ctx[f"{user}_deck"] = deck
-        return f"{path} ({len(r.content):,} bytes, {len(deck.slides)} slides, {charts} native charts)"
+        chart_label = "chart" if charts == 1 else "charts"
+        return f"{path} ({len(r.content):,} bytes, {len(deck.slides)} slides, {charts} native {chart_label})"
 
     def numbers_trace_to_facts(self, user: str) -> str:
         view, deck = self.ctx[f"{user}_view"], self.ctx[f"{user}_deck"]
         spec, registry = DeckSpec.model_validate(view["spec"]), FactRegistry.load(view["facts"])
         assert numeric_integrity(spec, registry) == [] and chart_consistency(spec, registry) == []
         allowed = {format_value(f.value, f.format, f.unit) for f in registry.all() if f.value is not None}
-        seen, sources_text = [], ""
-        for slide in deck.slides:
+        seen, sources_text, chart_points = [], "", 0
+        assert len(deck.slides) == len(spec.slides)
+        for slide, slide_spec in zip(deck.slides, spec.slides, strict=True):
             text = "\n".join(sh.text_frame.text for sh in slide.shapes if sh.has_text_frame)
-            if "Sources" in text.split("\n", 1)[0]:
-                sources_text = text
+            if slide_spec.layout == "appendix_sources":
+                sources_text += text
                 continue
             for number in NUMBER.findall(text):
-                assert any(number in a for a in allowed), f"{number!r} is not a formatted fact"
+                assert number in allowed, f"{number!r} is not a formatted scalar fact"
                 seen.append(number)
+            charts = [shape.chart for shape in slide.shapes if shape.has_chart]
+            assert len(charts) == (1 if slide_spec.chart else 0)
+            if slide_spec.chart:
+                chart = charts[0]
+                expected_categories = list(registry.get(slide_spec.chart.series[0].fact_id).categories)
+                assert [category.label for category in chart.plots[0].categories] == expected_categories
+                assert len(chart.series) == len(slide_spec.chart.series)
+                for actual_series, series_spec in zip(chart.series, slide_spec.chart.series, strict=True):
+                    fact = registry.get(series_spec.fact_id)
+                    expected_name = FACT_PATTERN.sub(
+                        lambda match: format_value(
+                            registry.get(match.group(1)).value,  # type: ignore[arg-type]
+                            registry.get(match.group(1)).format,
+                            registry.get(match.group(1)).unit,
+                        ),
+                        series_spec.name,
+                    )
+                    assert actual_series.name == expected_name
+                    assert list(fact.categories) == expected_categories
+                    assert len(actual_series.values) == len(fact.values)
+                    assert all(
+                        math.isclose(actual, expected, rel_tol=1e-12, abs_tol=1e-12)
+                        for actual, expected in zip(actual_series.values, fact.values, strict=True)
+                    ), f"chart values differ from {fact.id}"
+                    chart_points += len(fact.values)
+            notes = slide.notes_slide.notes_text_frame.text
+            for fact_id in slide_spec.fact_refs():
+                assert fact_id in notes, f"notes miss provenance for {fact_id}"
         missing = [f.id for f in registry.all() if f"{f.id} " not in sources_text + " "]
         assert sources_text and not missing, f"sources slide misses {missing}"
-        return f"{len(seen)} numbers on slides, all from facts; sources slide cites {len(registry)} fact IDs"
+        return (
+            f"{len(seen)} scalar numbers and {chart_points} chart points match facts; "
+            f"sources slide cites {len(registry)} fact IDs"
+        )
 
     def alice_deck(self) -> str:
         run = self.request_outline("alice").split(":")[0]
@@ -152,7 +192,7 @@ class UseCase:
             ("3. bob edits the outline (human in the loop)", self.edit_outline),
             ("4. bob approves; data is fetched as bob", lambda: self.approve("bob")),
             ("5. bob downloads an editable PPTX", lambda: self.download("bob")),
-            ("6. every number traces to a fact ID", lambda: self.numbers_trace_to_facts("bob")),
+            ("6. scalar and chart values match facts", lambda: self.numbers_trace_to_facts("bob")),
             ("7. alice (EU-West only) gets her own deck", self.alice_deck),
             ("8. alice's deck is consistent too", self.alice_consistent),
             ("9. permissions change the numbers", self.permissions_differ),
