@@ -107,7 +107,8 @@ def test_demo_users_keep_the_local_tokens_and_default_to_bob() -> None:
     assert DEFAULT_DEMO_LABEL == "bob (all regions)"
     assert demo_user("bob (all regions)").token == "bob-token"
     assert demo_user("alice (her region only)").scope == "Her region only"
-    assert "Q3 2026" in DEFAULT_REQUEST
+    assert DEFAULT_REQUEST == "Build the quarterly customer retention review for the exec team"
+    assert "2026" not in DEFAULT_REQUEST
     with pytest.raises(KeyError):
         demo_user("nobody")
 
@@ -227,6 +228,8 @@ def test_outline_is_a_slide_list_with_human_labels() -> None:
     assert view.title == "Customer retention review"
     assert view.audience == "Executive team"
     assert view.period == "Q3 2026"
+    unnamed = outline_view({**OUTLINE, "period": "Last quarter"})
+    assert unnamed is not None and unnamed.period == "Last quarter"
     assert [slide.number for slide in view.slides] == ["01", "02", "03"]
     assert view.slides[0].requests == ()
     assert view.slides[1].layout == "Headline figures"
@@ -252,10 +255,10 @@ def test_facts_format_numbers_and_name_their_sources() -> None:
     assert active.queried_at == ""
     assert series.kind == "Series"
     assert series.display == "2 points"
-    assert [point.label for point in series.points] == ["Jul 2026", "Enterprise"]
+    assert [point.label for point in series.points] == ["Jul", "Enterprise"]
     assert series.points[0].display == "2.4%"
     assert series.points[0].magnitude == pytest.approx(2.4)
-    assert "Jul 2026 2.4%" in series.summary
+    assert "Jul 2.4%" in series.summary
     assert fact_views(None) == ()
     currency = fact_views(
         [{"id": "f9", "kind": "scalar", "format": "currency0", "unit": "EUR", "value": 1200, "label": "Revenue"}]
@@ -337,10 +340,10 @@ def test_slide_preview_resolves_fact_references_and_charts() -> None:
     assert kpi.lines == ("Weighted monthly churn was 1.8% and —",)
     assert kpi.sources[0] == "f1 · Monthly churn (weighted)"
     assert chart.chart_kind == "line"
-    assert chart.points[0].label == "Jul 2026"
+    assert chart.points[0].label == "Jul"
     assert "Values are percent." in chart.chart_caption
     assert "1 more series" in chart.chart_caption
-    assert chart.summary.startswith("Jul 2026")
+    assert chart.summary.startswith("Jul ")
     assert quote.body == "quote" and quote.quote == "Hold the line"
     assert slides[4].lines == ("Path", "Read 1.8% first")
     assert slides[5].lines == ("Ask — Brief", "Approve")

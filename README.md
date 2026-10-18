@@ -100,7 +100,7 @@ Drive the API directly with the fixed test tokens (`alice-token`, `bob-token`, `
 
 ```bash
 curl -s -X POST localhost:8000/v1/decks -H 'Authorization: Bearer bob-token' \
-  -H 'Content-Type: application/json' -d '{"request":"Build the Q3 2026 customer retention review for the exec team"}'
+  -H 'Content-Type: application/json' -d '{"request":"Build the quarterly customer retention review for the exec team"}'
 curl -s -X POST localhost:8000/v1/decks/<run_id>/decision -H 'Authorization: Bearer bob-token' \
   -H 'Content-Type: application/json' -d '{"action":"approve"}'
 curl -s -o deck.pptx localhost:8000/v1/decks/<run_id>/file -H 'Authorization: Bearer bob-token'
@@ -160,7 +160,7 @@ The run is checkpointed while it waits for approval. A new process can resume it
 
 An analyst needs the quarterly churn review for the exec team, built from governed data and safe to present.
 
-1. **Ask.** Signed in as **bob** in the UI (<http://localhost:8501>), the analyst asks: *"Build the Q3 2026 customer retention review for the exec team."*
+1. **Ask.** Signed in as **bob** in the UI (<http://localhost:8501>), the analyst asks: *"Build the quarterly customer retention review for the exec team."*
 2. **Review the plan.** The agent proposes five slides: title, headline KPIs, monthly churn trend, monthly churn by segment, and sources. The run pauses before any data is touched. The analyst can **Edit** ("drop the segment slide"), **Reject** or **Approve**.
 3. **Approve.** Only now does the agent run approved SQL templates, as bob.
 4. **Download.** The default outline produces five slides and two native charts. Dropping the segment slide and approving that same run produces four slides and one chart. The required **Sources** appendix lists the facts; notes include the exact SQL, bound parameters, template hash and query timestamp. The API returns the same facts. The UI previews each slide, lists each fact with its source, and offers the file for download.
@@ -172,7 +172,7 @@ An analyst needs the quarterly churn review for the exec team, built from govern
 | **alice** | Her region only | A full deck with her own numbers (2,184 active subscriptions) |
 | **carol** | Nothing | A clear refusal (`no_data`) and no deck |
 
-The Q3 review reports **weighted monthly churn and NRR**, not cumulative quarter-start cohort retention. The legacy IDs `churn_rate_quarter` and `nrr_quarter` retain their names for compatibility; template descriptions and slide labels specify the monthly aggregation. `as_of` records when the query ran, not when the source table refreshed.
+The quarterly review reports **weighted monthly churn and NRR**, not cumulative quarter-start cohort retention. The legacy IDs `churn_rate_quarter` and `nrr_quarter` retain their names for compatibility; template descriptions and slide labels specify the monthly aggregation. `as_of` records when the query ran, not when the source table refreshed.
 
 Downloaded decks are static files. Sharing one does not reapply the recipient's permissions.
 

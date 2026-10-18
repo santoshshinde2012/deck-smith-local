@@ -27,7 +27,7 @@ from decksmith.domain.deckspec import DeckSpec
 from decksmith.domain.facts import FactRegistry, format_value
 from decksmith.domain.integrity import FACT_PATTERN, chart_consistency, numeric_integrity
 
-REQUEST = "Build the Q3 2026 customer retention review for the exec team"
+REQUEST = "Build the quarterly customer retention review for the exec team"
 NUMBER = re.compile(r"(?<![\w.])[$€£]?\d[\d,]*(?:\.\d+)?%?")
 Row = tuple[str, bool, str]
 

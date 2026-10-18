@@ -47,6 +47,42 @@ def test_guardrail_ignores_other_nodes() -> None:
     assert json.loads(NoBareNumbersGuardrail(FakeLLM()).complete(req).text)["period"] == "2026-Q3"
 
 
+def test_unnamed_quarter_keeps_the_seeded_window_without_a_year_in_the_label() -> None:
+    llm = FakeLLM()
+    request = "Build the quarterly customer retention review for the exec team"
+    intake_request = LLMRequest(
+        node="intake",
+        tier="small",
+        run_id="r1",
+        messages=(Message(role="user", content=json.dumps({"request": request})),),
+    )
+    intake = json.loads(llm.complete(intake_request).text)
+    assert intake["period"] == "Last quarter"
+    assert "2026" not in intake["period"]
+    plan_request = LLMRequest(
+        node="planner",
+        tier="strong",
+        run_id="r1",
+        messages=(
+            Message(
+                role="user",
+                content=json.dumps({"request": request, "intake": intake, "feedback": "", "templates": []}),
+            ),
+        ),
+    )
+    plan = json.loads(llm.complete(plan_request).text)
+    assert plan["period"] == "Last quarter"
+    window = plan["slides"][1]["data_requests"][0]["params"]
+    assert window == {"start_month": "2026-07-01", "end_month": "2026-10-01"}
+    named = LLMRequest(
+        node="intake",
+        tier="small",
+        run_id="r1",
+        messages=(Message(role="user", content=json.dumps({"request": "Build the Q4 2026 retention review"})),),
+    )
+    assert json.loads(llm.complete(named).text)["period"] == "2026-Q4"
+
+
 def test_fake_llm_counts_and_faults() -> None:
     llm = FakeLLM({"writer": ["invalid_json"]})
     assert not llm.complete(_writer_request()).text.endswith("}")

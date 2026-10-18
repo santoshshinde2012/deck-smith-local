@@ -22,7 +22,7 @@ DEMO_USERS: tuple[tuple[str, str, str, str], ...] = (
     ("carol (no access)", "carol-token", "Carol", "No data access"),
 )
 DEFAULT_DEMO_LABEL = "bob (all regions)"
-DEFAULT_REQUEST = "Build the Q3 2026 customer retention review for the exec team"
+DEFAULT_REQUEST = "Build the quarterly customer retention review for the exec team"
 
 DRAFT_LABEL = "Draft outline"
 APPROVE_LABEL = "Approve"
@@ -784,7 +784,7 @@ def category_label(value: object) -> str:
     month = int(match.group(2))
     if not 1 <= month <= 12:
         return text
-    return f"{_MONTHS[month - 1]} {match.group(1)}"
+    return _MONTHS[month - 1]
 
 
 def _audience(value: object) -> str:
