@@ -1,6 +1,6 @@
 # Architecture
 
-DeckSmith Local is the DeckSmith agent with its infrastructure swapped for local stand-ins. The agent's logic depends only on small interfaces called **ports**, and every concrete technology sits behind one of them in an **adapter**. The same graph runs on DuckDB with a fake LLM in CI, or on the Databricks SQL Statement API with on-behalf-of user tokens, and only configuration changes.
+DeckSmith Local is the DeckSmith agent with its infrastructure swapped for local stand-ins. The agent's logic depends only on small interfaces called **ports**, and every concrete technology sits behind one of them in an **adapter**. The graph is tested on DuckDB with a fake LLM. Configurable Databricks SQL and identity adapters pass mocked tests; a live workspace deployment still needs validation and infrastructure setup.
 
 The [README](README.md#why) explains what DeckSmith is for. The [decision records](docs/decisions.md) and the [test plan](docs/test-plan.md) complete the design.
 
@@ -46,7 +46,7 @@ Every diagram in this repository uses one semantic palette on a white canvas, wi
 </p>
 <p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/system-context.mmd"><code>docs/diagrams/system-context.mmd</code></a></sub></p>
 
-The LLM never writes SQL and never types a number: it picks approved templates, and every figure in its output is a `{{fact:fN}}` reference that the renderer fills in. Every box under "Behind the ports" has a local and a Databricks implementation.
+The planner picks approved SQL templates. Numeric metrics reference scalar facts or chart-series facts; checks validate their types and citations. The ports have local implementations and proposed Databricks replacements. Managed state, tracing and storage require deployment configuration and live verification.
 
 ## Ports and adapters
 
@@ -94,9 +94,13 @@ You select each adapter with a `DECKSMITH_*` variable (see [Configuration](READM
 
 The graph enforces three rules:
 
-- **The LLM never writes SQL.** The planner picks a template ID and gives parameters as strings. `validate_params` checks them against each template's types and patterns before any query runs.
-- **The LLM never writes numbers.** Only `data_fetch` creates `Fact` objects. The writer must refer to a number as `{{fact:fN}}`. Two checks catch bare digits: the `NoBareNumbersGuardrail` gateway decorator, which stands in for Portkey's guardrail and returns status 446, and the deterministic `check` node. Either one sends the run back to the writer. After three writes the run fails and no deck is rendered.
-- **No data means no deck.** If none of the requested queries returns rows the user may see, the run ends with `no_data` and a plain explanation, never an empty deck.
+- **The LLM never writes SQL.** The planner picks a template ID and gives parameters as strings. `validate_params` checks them against each template's types and patterns when the planner proposes the outline, so a bad plan fails before approval and before any query runs.
+- **Numeric metrics use typed facts.** Only `data_fetch` adds query results to the fact registry. Writer text uses scalar placeholders, while charts use series references. Checks reject missing references, series used as scalar placeholders, inconsistent chart categories/units and missing source coverage. Two checks catch bare digits in writer text, including notes and chart names: the `NoBareNumbersGuardrail` gateway decorator, which stands in for Portkey's guardrail and returns status 446, and the deterministic `check` node. Either one sends the run back to the writer. After three writes the run fails and no deck is rendered.
+- **No data means no deck.** If any requested query is denied or returns no rows, the run ends with `no_data` and a plain explanation, never a partial or empty deck. The message mentions access only when the catalog or warehouse refused the user; an empty result may mean the period has no data or that row-level policies hid it.
+
+The final check also enforces the approved slide IDs, order, layouts, audience and period, and a sources appendix covering referenced facts. These checks do not prove that a title or recommendation is a sound interpretation. Spelled-out numbers and metric meanings require review.
+
+Facts retain executed SQL, normalized parameters, a template hash and the query timestamp. That provenance supports reproduction; it does not establish source freshness or a table snapshot version.
 
 ## A request, end to end
 
@@ -108,7 +112,7 @@ The graph enforces three rules:
 </p>
 <p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/request-sequence.mmd"><code>docs/diagrams/request-sequence.mmd</code></a></sub></p>
 
-The `Principal`, which carries the user's token, travels in a `ContextVar` (`application/context.py`). It is never stored in graph state, so the token is never written into a checkpoint. Each step logs a JSON line with `run_id` and `duration_ms`, and errors follow the taxonomy in [docs/errors.md](docs/errors.md).
+The `Principal`, which carries the user's token, travels in a `ContextVar` (`application/context.py`). HTTP authentication occurs before ResponsesAgent tracing. Only a credential-free model request enters the automatically traced `predict` method; credential-bearing custom inputs are rejected before tracing. The principal never enters graph state. Direct integrations use the authenticated header entry point rather than putting credentials in `custom_inputs`. Each step logs a JSON line with `run_id` and `duration_ms`, and errors follow the taxonomy in [docs/errors.md](docs/errors.md).
 
 ## Security and permissions
 
@@ -122,7 +126,7 @@ The `Principal`, which carries the user's token, travels in a `ContextVar` (`app
 
 - **Who you are.** `StaticTokenIdentity` maps the fixed test tokens to alice (EU-West), bob (all regions) and carol (no access). `JwtIdentity` validates HS256 tokens; `DatabricksAppsIdentity` reads the on-behalf-of token that Databricks Apps forwards.
 - **What you can see.** Locally, each user has one view per table (`v_<table>__<user>`) and no view means no access. On Databricks, Unity Catalog row filters do the same job. The local views are an emulation, **not a security boundary** ([SECURITY.md](SECURITY.md)).
-- **Whose run it is.** Runs and files are looked up by owner, so another user gets 404, not 403, and learns nothing about the run.
+- **Whose run it is.** Runs and file downloads are looked up by owner, so another user gets 404. This does not enforce recipient permissions on a copied or emailed PowerPoint. Saved decks reflect query-time access and do not automatically respond to later policy changes.
 - **Secrets.** A provider key for the real-LLM path comes from `DECKSMITH_LLM_API_KEY`, is held as a `SecretStr`, is filled into the gateway config in memory only, and never appears in logs or files.
 
 ## Deployment

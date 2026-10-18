@@ -3,7 +3,7 @@
 
 # deck-smith-local
 
-**An AI agent that turns a plain-English request into an editable PowerPoint deck, built only from governed data, with every number traceable to its query.**
+**An AI agent that turns a plain-English request into an editable PowerPoint deck, built only from governed data, with numeric metrics traceable to reviewed SQL.**
 
 [![CI](https://github.com/santoshshinde2012/deck-smith-local/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/santoshshinde2012/deck-smith-local/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/santoshshinde2012/deck-smith-local/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/santoshshinde2012/deck-smith-local/actions/workflows/codeql.yml)
@@ -11,13 +11,13 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![Version](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fsantoshshinde2012%2Fdeck-smith-local%2Fmain%2Fpyproject.toml&query=%24.project.version&label=version&color=orange)](CHANGELOG.md)
 
-<img src="docs/examples/sample-deck.png" alt="The five-slide deck DeckSmith builds: title, headline KPIs, monthly churn trend, churn by segment, and a sources slide" width="820">
+<img src="docs/examples/sample-deck.png" alt="The five-slide deck DeckSmith builds: title, headline KPIs, monthly churn trend, monthly churn by segment, and a sources slide" width="820">
 
-<sub>The deck <code>make demo</code> builds for one test user. Charts and text are native and editable. <a href="docs/examples/sample-deck.pptx">Download the .pptx</a>.</sub>
+<sub>A preview reconstructed from the PPTX text, geometry and chart data; fonts and axes may differ in PowerPoint. The deck <code>make demo</code> builds contains native, editable charts and text. <a href="docs/examples/sample-deck.pptx">Download the .pptx</a>.</sub>
 
 </div>
 
-DeckSmith plans the deck, waits for a person to approve the outline, fetches numbers through approved SQL as the signed-in user, and renders a native `.pptx`. This repository runs it entirely on your machine, on a local stack shaped like Databricks. Every dependency sits behind a port, so moving to Databricks changes configuration, not code.
+DeckSmith plans the deck, waits for a person to approve the outline, fetches numbers through approved SQL as the signed-in user, and renders a native `.pptx`. This repository runs it entirely on your machine, on a local stack shaped like Databricks. Ports keep the graph independent of infrastructure. Databricks adapters and forwarded-header authentication are implemented and tested offline; workspace resources, networking, managed services and deployment remain unverified.
 
 > [!NOTE]
 > All data is synthetic (seed 42, about 8,000 subscriptions). No real customer data is used anywhere.
@@ -46,7 +46,7 @@ DeckSmith plans the deck, waits for a person to approve the outline, fetches num
 Executive decks are full of numbers, and an LLM that writes those numbers itself will sooner or later make one up. Letting it write SQL against governed data raises a second problem: whose permissions does that query run with? DeckSmith answers both by design:
 
 - **The LLM never writes SQL.** It picks from approved, parameterised templates.
-- **The LLM never types a number.** Query results become *facts*, slides refer to them as `{{fact:fN}}`, and the renderer fills in the values. A guardrail and a deterministic check reject any bare digit.
+- **Numeric metrics reference typed facts.** The renderer fills scalar placeholders and native chart series from query results. Checks reject bare digits in writer text, incorrect fact types and incompatible chart categories. These rules do not assess the truth of prose or spelled-out quantities.
 - **A person approves the plan** before any data is touched.
 - **Data is fetched as the user**, so two people asking the same question get decks with their own numbers, and someone with no access gets a clear refusal instead of an empty deck.
 
@@ -110,19 +110,19 @@ curl -s -o deck.pptx localhost:8000/v1/decks/<run_id>/file -H 'Authorization: Be
 
 ## Architecture
 
-DeckSmith is one agent with two deployments. The same code runs on a local stack (a laptop, CI or an InstaBox VM) and on Databricks; only the adapters chosen in configuration differ.
+DeckSmith has a working local deployment and a Databricks deployment design. Settings choose the infrastructure adapters. Live SQL parity, Apps proxy authentication, Lakebase credentials, managed tracing, artifact storage and Agent Runtime hosting still need workspace validation.
 
 ### System overview
 
 <p align="center">
   <a href="docs/assets/diagrams/system.svg"><picture>
     <source type="image/svg+xml" srcset="docs/assets/diagrams/system.svg">
-    <img src="docs/assets/diagrams/system.png" alt="End-to-end system architecture. One agent, two deployments: a local stack for laptops, CI and InstaBox, and Databricks. Only configuration changes.">
+    <img src="docs/assets/diagrams/system.png" alt="End-to-end system architecture. A tested local agent and a Databricks deployment design, connected through configurable adapters.">
   </picture></a>
 </p>
 <p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/system.mmd"><code>docs/diagrams/system.mmd</code></a></sub></p>
 
-A request goes from the browser through the Streamlit UI and FastAPI into the LangGraph agent, which pauses for a person's approval before it reads any data. Numbers come only from approved SQL templates run as the signed-in user; each result becomes a fact in the registry, the writer cites facts by ID, and a guardrail and an integrity check reject any number typed by the model. A dotted line joins each local service to the Databricks service that replaces it. Model calls go through the Portkey gateway to Ollama, Bedrock EU or OpenAI; in CI the in-process FakeLLM stands in for the gateway, so no keys or network are needed.
+A request goes from the browser through the Streamlit UI and FastAPI into the LangGraph agent, which pauses for a person's approval before it reads any data. Numeric metrics come from approved SQL templates run as the requesting user; each result becomes a fact in the registry, and checks validate writer references, chart alignment, source coverage and the approved slide structure. A dotted line joins each local service to the Databricks service that replaces it. Model calls go through the Portkey gateway to Ollama, Bedrock EU or OpenAI; in CI the in-process FakeLLM stands in for the gateway, so no keys or network are needed.
 
 ### Ports and adapters
 
@@ -134,7 +134,7 @@ A request goes from the browser through the Streamlit UI and FastAPI into the La
 </p>
 <p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/hexagonal.mmd"><code>docs/diagrams/hexagonal.mmd</code></a></sub></p>
 
-The application core depends only on eight small `Protocol` ports, and every technology lives in an adapter with a local and a Databricks implementation. `bootstrap.py` is the composition root and the only module that imports adapters; `tests/architecture` enforces that rule, and `tests/contract` runs the same behavioural tests against each adapter of a port.
+The application core depends only on eight small `Protocol` ports, and each technology lives in an adapter with a local implementation and a Databricks implementation or deployment target. `bootstrap.py` is the composition root and the only module that imports adapters; `tests/architecture` enforces that rule, and `tests/contract` runs the same behavioural tests against each adapter of a port.
 
 | Colour | Meaning | Colour | Meaning |
 | --- | --- | --- | --- |
@@ -154,16 +154,16 @@ The application core depends only on eight small `Protocol` ports, and every tec
 </p>
 <p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/request-to-deck.mmd"><code>docs/diagrams/request-to-deck.mmd</code></a></sub></p>
 
-The run is checkpointed while it waits for approval, so any process can resume it. If the user can see none of the requested data, the run stops with `no_data` and no deck is built. The [full sequence](ARCHITECTURE.md#a-request-end-to-end), the [agent graph](ARCHITECTURE.md#the-agent-graph), the [security flow](ARCHITECTURE.md#security-and-permissions) and the [Compose deployment](ARCHITECTURE.md#deployment) are in [ARCHITECTURE.md](ARCHITECTURE.md), all in the same palette.
+The run is checkpointed while it waits for approval. A new process can resume it when it uses the same persistent Postgres store; the default in-memory store lasts only for the current process. If any requested query is denied or returns no rows, the run stops with `no_data` and no deck is built; the message says whether access was denied or the queries returned nothing. The [full sequence](ARCHITECTURE.md#a-request-end-to-end), the [agent graph](ARCHITECTURE.md#the-agent-graph), the [security flow](ARCHITECTURE.md#security-and-permissions) and the [Compose deployment](ARCHITECTURE.md#deployment) are in [ARCHITECTURE.md](ARCHITECTURE.md), all in the same palette.
 
 ## The use case, step by step
 
 An analyst needs the quarterly churn review for the exec team, built from governed data and safe to present.
 
 1. **Ask.** Signed in as **bob** in the UI (<http://localhost:8501>), the analyst asks: *"Build the Q3 2026 customer retention review for the exec team."*
-2. **Review the plan.** The agent proposes five slides: title, headline KPIs, monthly churn trend, churn by segment, and sources. The run pauses before any data is touched. The analyst can **Edit** ("drop the segment slide"), **Reject** or **Approve**.
+2. **Review the plan.** The agent proposes five slides: title, headline KPIs, monthly churn trend, monthly churn by segment, and sources. The run pauses before any data is touched. The analyst can **Edit** ("drop the segment slide"), **Reject** or **Approve**.
 3. **Approve.** Only now does the agent run approved SQL templates, as bob.
-4. **Download.** The result is an editable `.pptx` with native charts. Every number on a slide is a fact (`f1`–`f5`), and the **Sources** slide maps each fact to its query, tables and timestamp. The API returns the same facts, and the UI lists them under the download button.
+4. **Download.** The default outline produces five slides and two native charts. Dropping the segment slide and approving that same run produces four slides and one chart. The required **Sources** appendix lists the facts; notes include the exact SQL, bound parameters, template hash and query timestamp. The API returns the same facts, and the UI lists them under the download button.
 5. **Same request, different user.** Permissions change the outcome:
 
 | User | Can see | Result |
@@ -171,6 +171,10 @@ An analyst needs the quarterly churn review for the exec team, built from govern
 | **bob** | All regions | A full deck, with 6,172 active subscriptions |
 | **alice** | EU-West only | A full deck with her own numbers (2,184 active subscriptions) |
 | **carol** | Nothing | A clear refusal (`no_data`) and no deck |
+
+The Q3 review reports **weighted monthly churn and NRR**, not cumulative quarter-start cohort retention. The legacy IDs `churn_rate_quarter` and `nrr_quarter` retain their names for compatibility; template descriptions and slide labels specify the monthly aggregation. `as_of` records when the query ran, not when the source table refreshed.
+
+Downloaded decks are static files. Sharing one does not reapply the recipient's permissions.
 
 Users can't see each other's runs (404), and anonymous calls are rejected (401). `make e2e-usecase` checks every step against the running API and writes `out/e2e-usecase.md`.
 
@@ -181,11 +185,11 @@ Users can't see each other's runs (404), and anonymous calls are rejected (401).
 1. API is up                                  PASS    API up at http://localhost:8000
 2. bob asks for a churn review deck           PASS    run 57e6c445: outline s01, s02, s03, s04, s05, paused for approval
 3. bob edits the outline (human in the loop)  PASS    edit applied (s01, s02, s03, s05); still waiting for approval
-4. bob approves; data is fetched as bob       PASS    status done: 5 slides, 5 facts
-5. bob downloads an editable PPTX             PASS    out/usecase-bob.pptx (54,215 bytes, 5 slides, 2 native charts)
-6. every number traces to a fact ID           PASS    4 numbers on slides, all from facts; sources slide cites 5 fact IDs
+4. bob approves; data is fetched as bob       PASS    status done: 4 slides, 4 facts
+5. bob downloads an editable PPTX             PASS    out/usecase-bob.pptx (4 slides, 1 native chart)
+6. scalar and chart values match facts        PASS    4 scalar numbers and 3 chart points match facts; sources slide cites 4 fact IDs
 7. alice (EU-West only) gets her own deck     PASS    run 39a25608: status done: 5 slides, 5 facts
-8. alice's deck is consistent too             PASS    4 numbers on slides, all from facts; sources slide cites 5 fact IDs
+8. alice's deck is consistent too             PASS    4 scalar numbers and 6 chart points match facts; sources slide cites 5 fact IDs
 9. permissions change the numbers             PASS    active subscriptions: bob 6,172 (all regions) vs alice 2,184 (EU-West only)
 10. carol (no access) is refused              PASS    no_data: None of the requested data is visible to you, so no deck was produced.
 11. runs are private; auth is required        PASS    alice cannot see bob's run or file (404); anonymous request rejected (401)
@@ -200,9 +204,9 @@ Users can't see each other's runs (404), and anonymous calls are rejected (401).
 | Area | What is in place |
 | --- | --- |
 | Agent | LangGraph graph with a human-approval interrupt, resumable from a checkpoint; a bounded writer and QA loop |
-| Numeric integrity | Facts with provenance, a sources slide, a bare-number guardrail (446) and a deterministic check |
+| Numeric integrity | Scalar and series type checks, aligned chart categories/units, digit checks across writer text, source coverage, and approved slide structure |
 | Data access | Approved SQL templates in Databricks SQL, transpiled to DuckDB by sqlglot; per-user views locally, Unity Catalog on Databricks |
-| Output | Native, editable `.pptx` from python-pptx, with real charts and tables |
+| Output | Native, editable `.pptx` from python-pptx, with real charts and a sources appendix |
 | Interfaces | FastAPI (`/v1/decks`, OpenAPI at `/docs`), a Streamlit UI, and an MLflow `ResponsesAgent` endpoint (`/responses`) |
 | Observability | One MLflow span per node, JSON logs with `run_id` and `duration_ms`, and a stable [error taxonomy](docs/errors.md) |
 | Evaluation | Ten golden prompts with deterministic scorers, also runnable through `mlflow.genai.evaluate` |
@@ -292,7 +296,7 @@ make stack-test    # E3 resume from Postgres, E6 gateway reachable
 | Streamlit UI | 8501 | Databricks App front end |
 | Ollama (native) | 11434 | Bedrock models, offline |
 
-The model IDs in `configs/portkey` are examples only; replace them with models you have access to.
+The model IDs in `configs/portkey` are examples only; replace them with models you have access to. The Bedrock fallback there also needs AWS credentials, which the repo does not wire in ([configs/portkey](configs/portkey/README.md)).
 
 </details>
 
@@ -311,7 +315,7 @@ make diagrams      # re-render the architecture images from docs/diagrams/*.mmd
 | Scenario | Here | How |
 | --- | --- | --- |
 | E1 renderer golden | Yes | Slide XML content hash is stable across runs; overflow is flagged |
-| E2 numeric integrity | Yes | Every number on the produced deck resolves to a fact; charts plot series facts |
+| E2 numeric integrity | Yes | Scalar references, chart values/categories, sources and the approved structure are checked |
 | E3 interrupt and resume | Yes / stack | Resume in a fresh container from a shared checkpointer (offline), or from Postgres (`make stack-test`) |
 | E4 request to PPTX | Yes | Full graph; QA loop recovers from invalid JSON and unknown facts, and gives up after three writes |
 | E5 permissions | Yes | alice sees EU-West only; carol gets a clean `no_data` refusal |
@@ -352,7 +356,7 @@ curl -fsSL https://raw.githubusercontent.com/santoshshinde2012/deck-smith-local/
 
 - Requests resolve to a principal through the identity port; anonymous calls get 401, and another user's run or file gets 404.
 - Queries run only from approved templates, with validated parameters, against the user's own views.
-- The user's token stays in a `ContextVar` and is never written to a checkpoint. A provider key is held as a secret and never logged.
+- Authentication runs before ResponsesAgent tracing. Credentials are excluded from model request bodies, trace inputs and checkpoint state; the principal travels through a `ContextVar`. Regression tests inspect stored traces with dummy credentials. Provider keys are inserted into gateway configuration in memory.
 - The image runs as a non-root user without pip. CI runs CodeQL and pip-audit on every pull request, and the supply-chain workflow runs hadolint, trivy and an SBOM build whenever the images or dependencies change.
 
 The local per-user views emulate row filters; they are **not** a security boundary. See [SECURITY.md](SECURITY.md) to report a vulnerability, and the [security and permissions diagram](ARCHITECTURE.md#security-and-permissions) for the full flow.

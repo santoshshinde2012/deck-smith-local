@@ -23,6 +23,6 @@ sequenceDiagram
   G->>D: approved SQL, as the user
   D-->>G: rows become facts f1…fN
   G->>L: write slides that cite fact IDs
-  G->>G: guardrail and numeric check
+  G->>G: writer text and fact-reference checks
   G->>R: render with the facts
-  R-->>U: editable .pptx and a sources slide
+  R-->>U: editable static .pptx, sources and exact SQL in notes

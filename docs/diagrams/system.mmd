@@ -1,5 +1,5 @@
 %% diagram: system
-%% caption: End-to-end system architecture. One agent, two deployments: a local stack for laptops, CI and InstaBox, and Databricks. Only configuration changes.
+%% caption: System architecture. The local stack runs end to end. Databricks identity, catalog and SQL adapters are implemented and tested offline; workspace deployment, managed state, storage, tracing and model routing still need validation.
 flowchart TB
   USER(["Analyst in a browser<br/>bob · alice · carol"]):::ui
 
@@ -11,12 +11,12 @@ flowchart TB
 
   AGENT("LangGraph agent<br/>intake → planner<br/>→ human approval<br/>→ data_fetch → writer<br/>→ check → render"):::core
 
-  subgraph GOV["Governed data path: the LLM writes no SQL and no numbers"]
-    FR("Fact registry<br/>f1…fN with provenance"):::core
+  subgraph GOV["Governed data path: reviewed SQL and checked fact references"]
+    FR("Fact registry<br/>SQL · params · template hash"):::core
     TPL("Approved SQL templates<br/>Databricks SQL dialect"):::core
     CMP("SqlCompiler<br/>validated params · sqlglot"):::core
     GR("No-bare-numbers guardrail<br/>446 · rewrite"):::sec
-    PPTX[/"Editable .pptx<br/>native charts · sources slide"/]:::store
+    PPTX[/"Editable static .pptx<br/>caller data at query time<br/>no recipient access recheck"/]:::store
   end
 
   subgraph LOCAL["Local deployment · laptop, CI, InstaBox · Docker Compose"]
@@ -28,13 +28,13 @@ flowchart TB
     L_TR("MLflow 3 OSS<br/>traces · golden-set eval"):::obs
   end
 
-  subgraph DBX["Databricks deployment · same code, Databricks adapters"]
-    D_UC("Unity Catalog<br/>row filters"):::dbx
-    D_DS[("SQL warehouse<br/>Statement API, user token")]:::dbx
-    D_S3[("S3 · UC volumes")]:::dbx
-    D_ST[("Lakebase<br/>Postgres")]:::dbx
-    D_GW("Portkey Enterprise<br/>hybrid"):::dbx
-    D_TR("Managed<br/>MLflow"):::dbx
+  subgraph DBX["Databricks target · live deployment unverified"]
+    D_UC("Unity Catalog adapter<br/>built · offline tested"):::dbx
+    D_DS[("SQL Statement API adapter<br/>built · offline tested<br/>query as user")]:::dbx
+    D_S3[("S3 · UC volumes<br/>design")]:::dbx
+    D_ST[("Lakebase Postgres<br/>design")]:::dbx
+    D_GW("Production gateway<br/>design"):::dbx
+    D_TR("Managed MLflow<br/>design"):::dbx
   end
 
   subgraph MODELS["Models"]
@@ -68,7 +68,7 @@ flowchart TB
   L_GW -.- D_GW
   L_TR -.- D_TR
 
-  subgraph LEGEND["Legend · solid: request path · dotted arrow: state and tracing · dotted line: swapped by configuration"]
+  subgraph LEGEND["Legend · solid: request path · dotted arrow: state and tracing · dotted line: target mapping"]
     direction LR
     K1(["User / UI"]):::ui ~~~ K2("API"):::app ~~~ K3("Agent core"):::core ~~~ K4("Guardrail"):::sec ~~~ K5[("Local store")]:::store ~~~ K6("Gateway / LLM"):::llm ~~~ K7("Tracing"):::obs ~~~ K8("Databricks"):::dbx ~~~ K9("External model"):::ext
   end
