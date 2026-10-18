@@ -17,3 +17,6 @@ mlflow.db
 .DS_Store
 !docs/examples/*.pptx
 coverage.xml
+
+# Local drafts of the Medium article and its diagrams; never committed or pushed.
+article/

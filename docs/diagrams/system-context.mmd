@@ -1,5 +1,5 @@
 %% diagram: system-context
-%% caption: System context. Analysts talk to the UI; the agent reaches governed data, models, state and tracing only through its ports.
+%% caption: System context. The local use case runs through ports. Databricks identity and data adapters are offline tested; managed services and live deployment remain a design target.
 flowchart TB
   subgraph PEOPLE["People"]
     AN(["Analyst<br/>bob · alice · carol"]):::ui
@@ -10,23 +10,23 @@ flowchart TB
     API("DeckSmith API + agent<br/>FastAPI · LangGraph · :8000"):::app
   end
 
-  subgraph DEPS["Behind the ports: swapped by configuration"]
-    IDP("Identity<br/>test tokens · JWT · Apps OBO"):::sec
-    DATA[("Governed data<br/>DuckDB views → Databricks SQL")]:::store
-    STATE[("Checkpoints<br/>Postgres → Lakebase")]:::store
-    GW("LLM gateway<br/>Portkey OSS → Enterprise"):::llm
-    OBS("Tracing and evals<br/>MLflow 3"):::obs
+  subgraph DEPS["Behind the ports: local adapters and Databricks targets"]
+    IDP("Identity<br/>test tokens · JWT<br/>Apps OBO: offline tested"):::sec
+    DATA[("Data: DuckDB views locally<br/>Databricks SQL adapter: offline tested")]:::store
+    STATE[("Checkpoints: Postgres<br/>Lakebase: design")]:::store
+    GW("LLM gateway: Portkey OSS<br/>production routing: design"):::llm
+    OBS("Tracing and evals: MLflow 3<br/>managed deployment: design"):::obs
   end
 
   MODELS("Model providers<br/>Ollama · OpenAI · Bedrock"):::ext
-  DECK[/"Editable .pptx<br/>facts + sources slide"/]:::store
+  DECK[/"Editable static .pptx<br/>caller data at query time<br/>SQL and params in notes"/]:::store
 
   AN -->|asks, reviews outline, approves| UI
   UI -->|REST + bearer token| API
   API -->|resolve principal| IDP
   API -->|approved SQL, as the user| DATA
   API -->|pause and resume| STATE
-  API -->|prompts; numbers only as fact IDs| GW
+  API -->|prompts; writer fact references checked| GW
   GW -->|routes, retries, falls back| MODELS
   API -->|one span per node| OBS
   API -->|renders| DECK

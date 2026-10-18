@@ -75,8 +75,8 @@ def _planner(payload: dict[str, Any], _fault: str) -> str:
             "layout": "kpi",
             "title_hint": "Headline retention KPIs",
             "data_requests": [
-                {"template_id": "churn_rate_quarter", "params": window, "label": "Churn rate"},
-                {"template_id": "nrr_quarter", "params": window, "label": "Net revenue retention"},
+                {"template_id": "churn_rate_quarter", "params": window, "label": "Monthly churn (weighted)"},
+                {"template_id": "nrr_quarter", "params": window, "label": "Monthly NRR (weighted)"},
                 {
                     "template_id": "active_subscriptions",
                     "params": {"start_month": start.isoformat()},
@@ -93,8 +93,10 @@ def _planner(payload: dict[str, Any], _fault: str) -> str:
         {
             "slide_id": "s04",
             "layout": "chart",
-            "title_hint": "Churn by segment",
-            "data_requests": [{"template_id": "churn_by_segment", "params": window, "label": "Churn by segment"}],
+            "title_hint": "Monthly churn by segment",
+            "data_requests": [
+                {"template_id": "churn_by_segment", "params": window, "label": "Weighted monthly churn by segment"}
+            ],
         },
         {"slide_id": "s05", "layout": "appendix_sources", "title_hint": "Sources", "data_requests": []},
     ]
@@ -132,8 +134,8 @@ def _writer(payload: dict[str, Any], fault: str) -> str:
             kpis = [
                 {"label": label, "fact_id": by_template[t]}
                 for t, label in (
-                    ("churn_rate_quarter", "Churn rate"),
-                    ("nrr_quarter", "Net revenue retention"),
+                    ("churn_rate_quarter", "Monthly churn (weighted)"),
+                    ("nrr_quarter", "Monthly NRR (weighted)"),
                     ("active_subscriptions", "Active subscriptions"),
                 )
                 if t in by_template
@@ -143,7 +145,10 @@ def _writer(payload: dict[str, Any], fault: str) -> str:
             bullet = (
                 "Churn was 18% this quarter"
                 if fault == "bare_digit"
-                else f"Churn reached {{{{fact:{by_template['churn_rate_quarter']}}}}} this quarter"
+                else (
+                    f"Weighted monthly churn was {{{{fact:{by_template['churn_rate_quarter']}}}}} "
+                    "over the review period"
+                )
                 if "churn_rate_quarter" in by_template
                 else "Retention held steady"
             )

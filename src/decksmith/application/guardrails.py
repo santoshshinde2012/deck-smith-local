@@ -8,14 +8,14 @@ from decksmith.domain.errors import GuardrailViolation
 from decksmith.domain.integrity import contains_bare_digit
 from decksmith.ports.llm import LLMGateway, LLMRequest, LLMResponse
 
-_TEXT_FIELDS = ("title", "subtitle", "bullets", "label")
+_TEXT_FIELDS = ("title", "subtitle", "bullets", "label", "name", "notes")
 
 
 class NoBareNumbersGuardrail:
     """Client-side twin of the design's Portkey 'pg-no-bare-numbers' output guardrail (446 on deny).
 
-    Applies to the Writer only. Production enforces it in Portkey Enterprise as well; the deterministic
-    QA check in the graph is the second, independent line.
+    Applies to the Writer only; the deterministic QA check in the graph is the second line.
+    This rejects literal digits, not spelled-out quantities or misleading prose.
     """
 
     def __init__(self, inner: LLMGateway, nodes: frozenset[str] = frozenset({"writer"})) -> None:

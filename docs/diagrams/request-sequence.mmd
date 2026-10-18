@@ -35,18 +35,19 @@ sequenceDiagram
   end
   G->>D: approved SQL templates, as bob
   alt nothing visible to the user
-    D-->>G: empty
+    D-->>G: empty or AccessDenied
     G-->>UI: status no_data, no deck
   else rows
     D-->>G: rows → facts f1…f5
     loop at most 3 writes
       G->>L: writer (strong tier), behind the bare-number guardrail
       L-->>G: slides that cite {{fact:fN}}
-      G->>G: check numeric integrity and chart consistency
+    G->>G: check fact references and chart consistency
     end
     G->>R: render(spec, facts)
     R-->>G: .pptx with native charts and a sources slide
     G-->>UI: done, 5 slides, 5 facts
     UI->>API: GET /v1/decks/{id}/file
-    API-->>U: editable PowerPoint
+    API-->>U: editable static PowerPoint, SQL and params in notes
+    Note over U,UI: Exported files do not recheck recipient permissions
   end

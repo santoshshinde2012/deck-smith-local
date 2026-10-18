@@ -21,6 +21,9 @@ class FactSource(BaseModel):
     statement_id: str
     tables: tuple[str, ...]
     as_of: datetime
+    sql: str = ""
+    params: dict[str, str] = Field(default_factory=dict)
+    template_sha256: str = ""
 
 
 class Fact(BaseModel):

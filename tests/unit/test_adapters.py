@@ -169,6 +169,8 @@ def test_portkey_config_header_is_single_line_for_every_shipped_config() -> None
 
 
 def test_portkey_wraps_gateway_failures_without_leaking_detail() -> None:
+    import traceback
+
     import httpx
     import openai
 
@@ -191,3 +193,4 @@ def test_portkey_wraps_gateway_failures_without_leaking_detail() -> None:
             )
         )
     assert "status 401" in str(info.value) and "sk-" not in str(info.value)
+    assert "sk-" not in "".join(traceback.format_exception(info.value))

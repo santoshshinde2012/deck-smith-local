@@ -1,21 +1,21 @@
 %% diagram: security-flow
-%% caption: Security and permissions. Every request becomes a principal; data is read only through approved templates and the user's own views; numbers come only from facts; runs belong to their owner.
+%% caption: Security and permissions. Queries use the caller's data access through reviewed templates; writer references are checked; runs and downloads have owner checks. Exported PPTX files are static and do not enforce recipient permissions.
 flowchart TB
   REQ(["Request<br/>Authorization: Bearer …"]):::ui
   ID{{"IdentityProvider"}}:::port
   E401("401<br/>authentication_failed"):::sec
-  PRIN("Principal<br/>user · groups · token<br/>held in a ContextVar,<br/>never checkpointed"):::core
+  PRIN("Principal<br/>user · groups · token<br/>request context only<br/>no token in checkpoints or traces"):::core
   PLAN("Planner<br/>picks template IDs only;<br/>the LLM writes no SQL"):::core
   VAL("validate_params<br/>types and patterns"):::sec
   E422("422<br/>invalid_parameters"):::sec
   CAT{{"Catalog"}}:::port
-  SKIP("Query skipped<br/>AccessDenied is caught"):::sec
+  SKIP("No visible data<br/>catalog and SQL AccessDenied caught"):::sec
   DS{{"DataSource"}}:::port
   E409("Status no_data<br/>a refusal, not an empty deck"):::sec
-  FACTS("Facts f1…fn<br/>with provenance"):::core
+  FACTS("Facts f1…fn<br/>SQL · params · template hash<br/>query timestamp"):::core
   WRITE("Writer<br/>refers to {{fact:fN}}"):::llm
   G446("Guardrail + check<br/>bare digit → rewrite (446)<br/>max 3 writes"):::sec
-  DECK[/"Deck owned by the user"/]:::store
+  DECK[/"Owner checks on run and download<br/>exported PPTX is static"/]:::store
   E404("404 to anyone else<br/>run_not_found"):::sec
 
   REQ --> ID
@@ -27,6 +27,7 @@ flowchart TB
   CAT -->|no view for this user| SKIP
   SKIP -->|no facts at all| E409
   DS -->|no rows| SKIP
+  DS -->|warehouse permission denied| SKIP
   DS -->|rows| FACTS --> WRITE --> G446
   G446 -->|clean| DECK
   DECK -->|GET /file by another user| E404

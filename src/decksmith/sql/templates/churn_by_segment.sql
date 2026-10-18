@@ -1,5 +1,5 @@
 -- id: churn_by_segment
--- description: Churn rate by customer segment for a period
+-- description: Weighted monthly churn by customer segment over a period; not cumulative cohort churn
 -- kind: series
 -- format: pct1
 -- unit: ratio

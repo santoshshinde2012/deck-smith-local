@@ -1,5 +1,5 @@
 -- id: churn_rate_quarter
--- description: Churn rate for a period (churned subscriptions / active at month start), as a ratio
+-- description: Weighted monthly churn over a period (sum of monthly churned / sum of monthly active starts); not cumulative cohort churn
 -- kind: scalar
 -- format: pct1
 -- unit: ratio

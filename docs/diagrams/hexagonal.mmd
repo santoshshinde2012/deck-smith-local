@@ -1,5 +1,5 @@
 %% diagram: hexagonal
-%% caption: Ports and adapters. The core depends only on the eight ports; each port has local and Databricks adapters, and bootstrap.py wires one per port from settings.
+%% caption: Ports and adapters. Bootstrap chooses implementations for eight ports. Databricks identity, catalog and SQL adapters pass offline tests; Lakebase, managed MLflow, storage and production routing remain unverified design targets.
 flowchart TB
   subgraph DRIVING["Interfaces"]
     UI(["Streamlit UI"]):::ui
@@ -7,11 +7,11 @@ flowchart TB
     RA("ResponsesAgent<br/>/responses"):::app
   end
 
-  subgraph CORE["Application core: no I/O, no SDKs"]
+  subgraph CORE["Application core: I/O through ports"]
     SVC("DeckService<br/>start · decide · get"):::core
     GRAPH("LangGraph agent<br/>plan · approve · fetch<br/>write · check · render"):::core
     DOM("Domain<br/>DeckSpec · Fact · integrity"):::core
-    GUARD("No-bare-numbers<br/>guardrail (446)"):::sec
+    GUARD("Writer text guardrail<br/>and fact-reference checks"):::sec
     BOOT("bootstrap.py<br/>composition root"):::app
   end
 
@@ -37,15 +37,15 @@ flowchart TB
     L_LLM("FakeLLM<br/>Portkey OSS"):::local
   end
 
-  subgraph DBX["Databricks adapters"]
-    D_ID("Apps<br/>on-behalf-of"):::dbx
+  subgraph DBX["Databricks target · live deployment unverified"]
+    D_ID("Apps on-behalf-of<br/>built · offline tested"):::dbx
     D_TPL("Same template<br/>files"):::dbx
-    D_CAT("Unity Catalog<br/>row filters"):::dbx
-    D_DS("SQL Statement<br/>API"):::dbx
+    D_CAT("Unity Catalog adapter<br/>built · offline tested"):::dbx
+    D_DS("SQL Statement API<br/>built · offline tested"):::dbx
     D_REN("Same<br/>renderer"):::dbx
-    D_ST("Lakebase<br/>Postgres"):::dbx
-    D_TR("Managed<br/>MLflow"):::dbx
-    D_LLM("Portkey<br/>Enterprise hybrid"):::dbx
+    D_ST("Lakebase Postgres<br/>design"):::dbx
+    D_TR("Managed MLflow<br/>design"):::dbx
+    D_LLM("Production gateway<br/>design"):::dbx
   end
 
   UI -->|HTTP + bearer token| API
@@ -66,7 +66,7 @@ flowchart TB
   P_ST -.- L_ST -.- D_ST
   P_TR -.- L_TR -.- D_TR
 
-  subgraph LEGEND["Legend · solid arrow: calls · dotted line: implements"]
+  subgraph LEGEND["Legend · solid arrow: calls · dotted line: implementation or target mapping"]
     direction LR
     K1(["UI"]):::ui ~~~ K2("API · wiring"):::app ~~~ K3("Core"):::core ~~~ K4{{"Port"}}:::port ~~~ K5("Local adapter"):::local ~~~ K6("Databricks adapter"):::dbx ~~~ K7("Guardrail"):::sec
   end

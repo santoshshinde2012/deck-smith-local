@@ -5,11 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from decksmith import __version__
+from decksmith.application.context import acting_as
 from decksmith.application.service import Action, RunView
 from decksmith.bootstrap import Container, build_container
 from decksmith.domain.errors import AuthenticationError, DeckSmithError, InvalidParameters
@@ -89,18 +90,14 @@ def create_app(container: Container | None = None) -> FastAPI:
         return FileResponse(path, media_type=PPTX, filename=f"decksmith-{run_id[:8]}.pptx")
 
     @app.post("/responses")
-    def responses(body: dict[str, Any], request: Request) -> dict[str, Any]:
-        from mlflow.types.responses import ResponsesAgentRequest
-
+    def responses(body: Annotated[Any, Body()], user: User) -> dict[str, Any]:
         from decksmith.interfaces.responses_agent import DeckSmithResponsesAgent
 
-        token = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
-        body.setdefault("custom_inputs", {}).setdefault("access_token", token)
+        if not isinstance(body, dict):
+            raise InvalidParameters("Responses request must be an object")
         agent = DeckSmithResponsesAgent(app.state.container.service, app.state.container.identity)
-        try:
-            return agent.predict(ResponsesAgentRequest(**body)).model_dump(mode="json")  # type: ignore[no-any-return]
-        except AuthenticationError as exc:
-            raise HTTPException(401, str(exc)) from exc
+        with acting_as(user):
+            return agent.predict(body).model_dump(mode="json")  # type: ignore[arg-type,no-any-return]
 
     return app
 

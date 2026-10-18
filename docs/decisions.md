@@ -6,7 +6,7 @@ Each record is short: the context, the decision, and the consequences.
 
 - **Context.** The same agent must run offline in CI, on a laptop stack, and on Databricks.
 - **Decision.** The domain and application depend only on eight `Protocol` ports. Adapters are built in `bootstrap.py`, and settings choose them.
-- **Consequences.** Moving between environments changes configuration, not code. An architecture test enforces the dependency rule.
+- **Consequences.** Settings select infrastructure adapters; workspace resources, authentication, managed services and deployment compatibility still need separate validation. An architecture test enforces the dependency rule.
 
 ## D2. LangGraph with a human approval interrupt
 
@@ -24,7 +24,7 @@ Each record is short: the context, the decision, and the consequences.
 
 - **Context.** LLMs misquote numbers.
 - **Decision.** Only the data-fetch step creates facts with provenance. The writer refers to them as `{{fact:fN}}`. A gateway guardrail (status 446) and a deterministic check reject bare digits. The writer gets at most three attempts.
-- **Consequences.** Every number on a slide can be traced to a query, a table and a time.
+- **Consequences.** Numeric metrics reference facts with query, table and execution-time provenance. Narrative correctness and source freshness require separate review.
 
 ## D5. Deterministic python-pptx renderer
 
@@ -36,7 +36,7 @@ Each record is short: the context, the decision, and the consequences.
 
 - **Context.** Users must see only their own data.
 - **Decision.** Queries run as the caller: an on-behalf-of token on Databricks, per-user views locally. The principal travels in a `ContextVar`, never in checkpointed state.
-- **Consequences.** A user with no access gets a clear refusal. Tokens are never persisted.
+- **Consequences.** A user with no access gets a clear refusal. Credentials stay outside graph state and traced model inputs. Authentication precedes the automatically traced ResponsesAgent method, and credential-bearing model inputs are rejected at its outer boundary.
 
 ## D7. One LLM gateway
 
@@ -58,7 +58,7 @@ Each record is short: the context, the decision, and the consequences.
 ## D10. Error taxonomy and structured logs
 
 - **Context.** Clients and operators need stable, machine-readable failures and correlated logs.
-- **Decision.** Every error carries `code`, `category`, `status_code` and `retryable` (see `docs/errors.md`). The API maps errors only from these attributes. Logs are JSON lines from the standard library, with `run_id` bound by a `ContextVar`. Tokens, prompts and row data are never logged.
+- **Decision.** Every error carries `code`, `category`, `status_code` and `retryable` (see `docs/errors.md`). The API maps errors only from these attributes. Logs are JSON lines from the standard library, with `run_id` bound by a `ContextVar`. Application JSON logs omit tokens, prompts and row data. MLflow agent traces intentionally contain credential-free requests and outputs, including facts; access to the tracking destination must match that data. Regression tests verify that dummy credentials do not enter stored traces.
 - **Consequences.** New errors need no interface change. Logs can be shipped as they are to any JSON log store.
 
 ## D11. Fail-fast configuration

@@ -80,7 +80,7 @@ class PortkeyGateway:
         except APIError as exc:
             # Status and type only: provider messages can echo part of the key.
             status = getattr(exc, "status_code", None)
-            raise UpstreamError(f"LLM gateway call failed ({type(exc).__name__}, status {status})") from exc
+            raise UpstreamError(f"LLM gateway call failed ({type(exc).__name__}, status {status})") from None
         usage = response.usage
         return LLMResponse(
             text=response.choices[0].message.content or "",
