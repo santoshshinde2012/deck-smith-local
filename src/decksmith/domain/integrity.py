@@ -72,6 +72,25 @@ def chart_consistency(spec: DeckSpec, facts: FactRegistry) -> list[Issue]:
         for kpi in slide.kpis:
             if kpi.fact_id in facts and facts.get(kpi.fact_id).kind != "scalar":
                 issues.append(Issue(slide.slide_id, "kpi_needs_scalar", kpi.fact_id))
+            if kpi.delta_fact_id and kpi.delta_fact_id in facts and facts.get(kpi.delta_fact_id).kind != "scalar":
+                issues.append(Issue(slide.slide_id, "delta_needs_scalar", kpi.delta_fact_id))
+            if kpi.spark_fact_id and kpi.spark_fact_id in facts and facts.get(kpi.spark_fact_id).kind != "series":
+                issues.append(Issue(slide.slide_id, "spark_needs_series", kpi.spark_fact_id))
+        if slide.table:
+            plotted = []
+            for column in slide.table.columns:
+                if column.fact_id not in facts:
+                    continue
+                fact = facts.get(column.fact_id)
+                if fact.kind != "series":
+                    issues.append(Issue(slide.slide_id, "table_needs_series", column.fact_id))
+                else:
+                    plotted.append(fact)
+            if plotted:
+                first = plotted[0]
+                for fact in plotted[1:]:
+                    if fact.categories != first.categories:
+                        issues.append(Issue(slide.slide_id, "table_category_mismatch", fact.id))
     return issues
 
 

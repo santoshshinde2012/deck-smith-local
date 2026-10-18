@@ -3,7 +3,9 @@ from pathlib import Path
 import pytest
 from pptx import Presentation
 
-from decksmith.adapters.local.pptx_renderer import PptxRenderer, _fill
+from decksmith.adapters.local.design.charts import category_labels
+from decksmith.adapters.local.design.text import fill_text
+from decksmith.adapters.local.pptx_renderer import PptxRenderer
 from decksmith.domain.deckspec import DeckSpec
 from decksmith.domain.errors import GuardrailViolation
 from decksmith.domain.facts import FactRegistry
@@ -17,7 +19,10 @@ def test_renders_native_objects(renderer: PptxRenderer, spec_dict: dict[str, obj
     assert any("2.4%" in t for t in texts) and any("6,172" in t for t in texts)
     assert not any("{{fact" in t for t in texts)
     charts = [sh.chart for s in prs.slides for sh in s.shapes if sh.has_chart]
-    assert len(charts) == 1 and list(charts[0].plots[0].categories) == ["2026-07", "2026-08", "2026-09"]
+    assert len(charts) == 1
+    assert list(charts[0].plots[0].categories) == category_labels(["2026-07", "2026-08", "2026-09"])
+    visible = "\n".join(text for text in texts)
+    assert "queried" not in visible and "2026-" not in visible
     assert prs.core_properties.subject == "run_id=run1"
     assert "f3" in prs.slides[2].notes_slide.notes_text_frame.text  # provenance in speaker notes
 
@@ -68,7 +73,7 @@ def test_renderer_refuses_series_in_text_and_missing_source_appendix(
     with pytest.raises(GuardrailViolation, match="placeholder_needs_scalar"):
         renderer.render(spec, facts, "bad-series")
     with pytest.raises(GuardrailViolation, match="needs a scalar"):
-        _fill("Churn {{fact:f3}}", facts)
+        fill_text("Churn {{fact:f3}}", facts)
     spec.slides[3].bullets = []
     spec.slides.pop()
     with pytest.raises(GuardrailViolation, match="missing_sources_appendix"):
@@ -97,6 +102,7 @@ def test_query_details_are_in_notes_with_query_time_not_freshness(
     assert "queried 2026-10-01" in notes
     source_text = "\n".join(shape.text_frame.text for shape in prs.slides[-1].shapes if shape.has_text_frame)
     assert "SELECT" not in source_text
+    assert "queried" not in source_text
 
 
 def test_section_subtitle_is_rendered_and_cited(

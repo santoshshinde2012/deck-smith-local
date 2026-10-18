@@ -13,6 +13,7 @@ from collections import Counter
 from datetime import date
 from typing import Any
 
+from decksmith.domain.composition import layout_for, narrative_roles
 from decksmith.ports.llm import LLMRequest, LLMResponse
 
 
@@ -62,46 +63,36 @@ def _intake(payload: dict[str, Any], _fault: str) -> str:
     )
 
 
+_HINTS = {
+    "cover": "Retention review",
+    "divider": "The retention picture",
+    "scorecard": "Headline retention KPIs",
+    "trend": "The monthly path of churn",
+    "breakdown": "Churn across segments",
+    "agenda": "What this review covers",
+    "comparison": "Two ways to read retention",
+    "timeline": "How the review is sequenced",
+    "quote": "The point of the review",
+    "table": "Where churn sits by segment",
+    "summary": "Three readings of retention",
+    "split": "The story in two parts",
+    "narrative": "What the figures support",
+    "sources": "Sources",
+}
+
+
 def _planner(payload: dict[str, Any], _fault: str) -> str:
     intake = payload["intake"]
     year, quarter = int(intake["period"][:4]), int(intake["period"][-1])
     start = date(year, 3 * quarter - 2, 1)
     end = date(year + (quarter == 4), 1 if quarter == 4 else 3 * quarter + 1, 1)
     window = {"start_month": start.isoformat(), "end_month": end.isoformat()}
-    slides: list[dict[str, Any]] = [
-        {"slide_id": "s01", "layout": "title", "title_hint": "Retention review", "data_requests": []},
-        {
-            "slide_id": "s02",
-            "layout": "kpi",
-            "title_hint": "Headline retention KPIs",
-            "data_requests": [
-                {"template_id": "churn_rate_quarter", "params": window, "label": "Monthly churn (weighted)"},
-                {"template_id": "nrr_quarter", "params": window, "label": "Monthly NRR (weighted)"},
-                {
-                    "template_id": "active_subscriptions",
-                    "params": {"start_month": start.isoformat()},
-                    "label": "Active subscriptions",
-                },
-            ],
-        },
-        {
-            "slide_id": "s03",
-            "layout": "chart",
-            "title_hint": "Monthly churn trend",
-            "data_requests": [{"template_id": "churn_trend_monthly", "params": window, "label": "Monthly churn"}],
-        },
-        {
-            "slide_id": "s04",
-            "layout": "chart",
-            "title_hint": "Monthly churn by segment",
-            "data_requests": [
-                {"template_id": "churn_by_segment", "params": window, "label": "Weighted monthly churn by segment"}
-            ],
-        },
-        {"slide_id": "s05", "layout": "appendix_sources", "title_hint": "Sources", "data_requests": []},
-    ]
+    roles = narrative_roles(intake["audience"], payload.get("request", ""))
+    slides = [_planned_slide(role, index, window, start) for index, role in enumerate(roles, start=1)]
     if "segment" in payload.get("feedback", "").lower():
-        slides = [s for s in slides if s["slide_id"] != "s04"]
+        slides = [slide for slide in slides if slide.get("role") != "breakdown"]
+    for slide in slides:
+        slide.pop("role", None)
     return json.dumps(
         {
             "deck_title": "Customer retention review",
@@ -110,6 +101,31 @@ def _planner(payload: dict[str, Any], _fault: str) -> str:
             "slides": slides,
         }
     )
+
+
+def _planned_slide(role: str, index: int, window: dict[str, str], start: date) -> dict[str, Any]:
+    requests: list[dict[str, Any]] = []
+    if role == "scorecard":
+        requests = [
+            {"template_id": "churn_rate_quarter", "params": window, "label": "Monthly churn (weighted)"},
+            {"template_id": "nrr_quarter", "params": window, "label": "Monthly NRR (weighted)"},
+            {
+                "template_id": "active_subscriptions",
+                "params": {"start_month": start.isoformat()},
+                "label": "Active subscriptions",
+            },
+        ]
+    elif role == "trend":
+        requests = [{"template_id": "churn_trend_monthly", "params": window, "label": "Monthly churn"}]
+    elif role == "breakdown":
+        requests = [{"template_id": "churn_by_segment", "params": window, "label": "Weighted monthly churn by segment"}]
+    return {
+        "slide_id": f"s{index:02d}",
+        "layout": layout_for(role),
+        "title_hint": _HINTS[role],
+        "data_requests": requests,
+        "role": role,
+    }
 
 
 def _writer(payload: dict[str, Any], fault: str) -> str:
@@ -130,6 +146,15 @@ def _writer(payload: dict[str, Any], fault: str) -> str:
                     "subtitle": f"Prepared for the {outline['audience']} audience",
                 }
             )
+        elif layout == "section":
+            slides.append(
+                {
+                    "slide_id": sid,
+                    "layout": "section",
+                    "title": s["title_hint"],
+                    "subtitle": f"For the {outline['audience']} audience",
+                }
+            )
         elif layout == "kpi":
             kpis = [
                 {"label": label, "fact_id": by_template[t]}
@@ -142,6 +167,10 @@ def _writer(payload: dict[str, Any], fault: str) -> str:
             ]
             if not kpis:
                 continue
+            if "churn_trend_monthly" in by_template and "churn_rate_quarter" in by_template:
+                for kpi in kpis:
+                    if kpi["fact_id"] == by_template["churn_rate_quarter"]:
+                        kpi["spark_fact_id"] = by_template["churn_trend_monthly"]
             bullet = (
                 "Churn was 18% this quarter"
                 if fault == "bare_digit"
@@ -158,7 +187,7 @@ def _writer(payload: dict[str, Any], fault: str) -> str:
                 {
                     "slide_id": sid,
                     "layout": "kpi",
-                    "title": "Retention at a glance",
+                    "title": "Where retention stands",
                     "kpis": kpis,
                     "bullets": [bullet],
                     "sources": [k["fact_id"] for k in kpis],
@@ -169,16 +198,115 @@ def _writer(payload: dict[str, Any], fault: str) -> str:
             if template not in by_template:
                 continue
             kind = "line" if "trend" in template else "bar"
+            fact = _fact(payload["facts"], template)
+            title = _trend_title(fact) if "trend" in template else _breakdown_title(fact, s["title_hint"])
             slides.append(
                 {
                     "slide_id": sid,
                     "layout": "chart",
-                    "title": s["title_hint"],
+                    "title": title,
                     "chart": {
                         "type": kind,
                         "series": [{"name": s["data_requests"][0]["label"], "fact_id": by_template[template]}],
                     },
                     "sources": [by_template[template]],
+                }
+            )
+        elif layout == "agenda":
+            slides.append(
+                {
+                    "slide_id": sid,
+                    "layout": "agenda",
+                    "title": s["title_hint"],
+                    "bullets": ["The headline figures", "The monthly path", "The segment split", "The sources"],
+                }
+            )
+        elif layout == "bullets":
+            slides.append(
+                {
+                    "slide_id": sid,
+                    "layout": "bullets",
+                    "title": s["title_hint"],
+                    "bullets": ["Read the headline figures first", "Then the monthly path", "Then the segment split"],
+                }
+            )
+        elif layout == "two_content":
+            slides.append(
+                {
+                    "slide_id": sid,
+                    "layout": "two_content",
+                    "title": s["title_hint"],
+                    "bullets": [
+                        "The monthly path shows the shape",
+                        "The segment split shows where it sits",
+                        "The headline figures frame both",
+                        "The sources trace every figure",
+                    ],
+                }
+            )
+        elif layout == "comparison":
+            slides.append(
+                {
+                    "slide_id": sid,
+                    "layout": "comparison",
+                    "title": s["title_hint"],
+                    "columns": [
+                        {"heading": "The rate", "bullets": ["Weighted monthly churn", "Shows who left"]},
+                        {"heading": "The base", "bullets": ["Active subscriptions", "Shows who remains"]},
+                    ],
+                }
+            )
+        elif layout == "timeline":
+            slides.append(
+                {
+                    "slide_id": sid,
+                    "layout": "timeline",
+                    "title": s["title_hint"],
+                    "milestones": [
+                        {"label": "Headline", "detail": "The figures that frame the review"},
+                        {"label": "Trend", "detail": "The monthly path"},
+                        {"label": "Segments", "detail": "Where churn sits"},
+                        {"label": "Sources", "detail": "How to trace a figure"},
+                    ],
+                }
+            )
+        elif layout == "table":
+            template = "churn_by_segment" if "churn_by_segment" in by_template else ""
+            if not template:
+                continue
+            slides.append(
+                {
+                    "slide_id": sid,
+                    "layout": "table",
+                    "title": _breakdown_title(_fact(payload["facts"], template), s["title_hint"]),
+                    "table": {
+                        "row_heading": "Segment",
+                        "columns": [{"heading": "Weighted churn", "fact_id": by_template[template]}],
+                    },
+                    "sources": [by_template[template]],
+                }
+            )
+        elif layout == "summary":
+            slides.append(
+                {
+                    "slide_id": sid,
+                    "layout": "summary",
+                    "title": s["title_hint"],
+                    "bullets": [
+                        "The headline figures frame the review",
+                        "The monthly path shows the direction",
+                        "The segment split shows where it sits",
+                    ],
+                }
+            )
+        elif layout == "quote":
+            slides.append(
+                {
+                    "slide_id": sid,
+                    "layout": "quote",
+                    "title": s["title_hint"],
+                    "quote": "A retention review is a story about who stays.",
+                    "attribution": "Review note",
                 }
             )
         elif layout == "appendix_sources":
@@ -193,3 +321,32 @@ def _writer(payload: dict[str, Any], fault: str) -> str:
             "slides": slides,
         }
     )
+
+
+def _fact(facts: list[dict[str, Any]], template: str) -> dict[str, Any]:
+    for fact in facts:
+        if fact.get("template_id") == template:
+            return fact
+    return {}
+
+
+def _trend_title(fact: dict[str, Any]) -> str:
+    values = fact.get("values") or []
+    if len(values) < 2:
+        return "The monthly path of churn"
+    if values[-1] < values[0]:
+        return "Monthly churn ended lower than it started"
+    if values[-1] > values[0]:
+        return "Monthly churn ended higher than it started"
+    return "Monthly churn ended where it started"
+
+
+def _breakdown_title(fact: dict[str, Any], fallback: str) -> str:
+    categories = list(fact.get("categories") or [])
+    values = list(fact.get("values") or [])
+    if not categories or len(categories) != len(values):
+        return fallback
+    peak = str(categories[max(range(len(values)), key=lambda index: (values[index], -index))])
+    if any(character.isdigit() for character in peak):
+        return "Churn is uneven across segments"
+    return f"Churn is highest in {peak}"

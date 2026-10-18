@@ -5,13 +5,28 @@ from pydantic import ValidationError
 
 from decksmith.application.guardrails import _has_bare_number
 from decksmith.application.prompts import intake_messages, planner_messages, writer_messages
-from decksmith.domain.deckspec import DeckSpec
+from decksmith.domain.deckspec import DeckSpec, Slide
 from decksmith.domain.facts import FactRegistry
 from decksmith.domain.integrity import chart_consistency, numeric_integrity, outline_consistency, source_coverage
 from decksmith.domain.outline import Outline
 
 
-@pytest.mark.parametrize("field", ["title", "subtitle", "bullets", "label", "name", "notes"])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "title",
+        "subtitle",
+        "bullets",
+        "label",
+        "name",
+        "notes",
+        "quote",
+        "attribution",
+        "heading",
+        "detail",
+        "row_heading",
+    ],
+)
 def test_guardrail_checks_every_writer_text_field(field: str) -> None:
     assert _has_bare_number(json.dumps({field: ["Invented 99%"] if field == "bullets" else "Invented 99%"}))
     assert not _has_bare_number(json.dumps({field: "Observed {{fact:f1}}"}))
@@ -64,6 +79,38 @@ def test_charts_require_matching_category_order_and_measure(
     assert code in {issue.code for issue in chart_consistency(spec, facts)}
 
 
+def test_kpi_deltas_sparks_and_tables_use_the_right_fact_kind(
+    spec_dict: dict[str, object], facts: FactRegistry
+) -> None:
+    spec = DeckSpec.model_validate(spec_dict)
+    other = facts.get("f3").model_copy(update={"id": "f4", "categories": ("A", "B", "C")})
+    facts.add(other)
+    kpi = spec.slides[1]
+    assert kpi.kpis
+    kpi.kpis[0].delta_fact_id = "f3"
+    kpi.kpis[0].spark_fact_id = "f1"
+    assert {issue.code for issue in chart_consistency(spec, facts)} >= {"delta_needs_scalar", "spark_needs_series"}
+    spec.slides[2].chart.series[0].fact_id = "f99"  # type: ignore[union-attr]
+    table = {
+        "slide_id": "s06",
+        "layout": "table",
+        "title": "Where it sits",
+        "table": {
+            "row_heading": "Segment",
+            "columns": [
+                {"heading": "Churn", "fact_id": "f3"},
+                {"heading": "Other", "fact_id": "f4"},
+                {"heading": "Rate", "fact_id": "f1"},
+                {"heading": "Missing", "fact_id": "f98"},
+            ],
+        },
+        "sources": ["f3", "f4"],
+    }
+    spec.slides.append(Slide.model_validate(table))
+    codes = {issue.code for issue in chart_consistency(spec, facts)}
+    assert {"table_needs_series", "table_category_mismatch", "delta_needs_scalar"} <= codes
+
+
 def test_text_references_are_inferred_and_require_visible_sources(spec_dict: dict[str, object]) -> None:
     spec = DeckSpec.model_validate(spec_dict)
     spec.slides[3].bullets = ["Churn reached {{fact:f1}}"]
@@ -109,19 +156,27 @@ def test_all_model_prompts_supply_the_actual_json_schema() -> None:
         assert schema["additionalProperties"] is False
 
 
-def test_schema_refuses_unimplemented_tables_and_kpi_deltas(spec_dict: dict[str, object]) -> None:
+def test_table_and_summary_need_their_content_and_deltas_are_fact_ids(spec_dict: dict[str, object]) -> None:
     spec = DeckSpec.model_validate(spec_dict)
     payload = spec.model_dump()
-    payload["slides"][3]["layout"] = "table"
-    with pytest.raises(ValidationError, match="layout"):
+    payload["slides"].append({"slide_id": "s06", "layout": "table", "title": "Where it sits"})
+    with pytest.raises(ValidationError, match="columns"):
+        DeckSpec.model_validate(payload)
+    payload = spec.model_dump()
+    payload["slides"].append(
+        {"slide_id": "s06", "layout": "summary", "title": "Three readings", "bullets": ["One point"]}
+    )
+    with pytest.raises(ValidationError, match="three takeaways"):
         DeckSpec.model_validate(payload)
     payload = spec.model_dump()
     payload["slides"][1]["kpis"][0]["delta_fact_id"] = "f2"
-    with pytest.raises(ValidationError, match="delta_fact_id"):
-        DeckSpec.model_validate(payload)
+    payload["slides"][1]["kpis"][0]["spark_fact_id"] = "f3"
+    parsed = DeckSpec.model_validate(payload)
+    assert parsed.slides[1].kpis[0].delta_fact_id == "f2"
+    assert parsed.slides[1].kpis[0].spark_fact_id == "f3"
     schema = DeckSpec.model_json_schema()
-    assert "table" not in schema["$defs"]["Slide"]["properties"]["layout"]["enum"]
-    assert "delta_fact_id" not in schema["$defs"]["Kpi"]["properties"]
+    assert "table" in schema["$defs"]["Slide"]["properties"]["layout"]["enum"]
+    assert "delta_fact_id" in schema["$defs"]["Kpi"]["properties"]
 
 
 @pytest.mark.parametrize("field", ["subtitle", "bullets", "kpis", "chart"])

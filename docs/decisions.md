@@ -29,8 +29,8 @@ Each record is short: the context, the decision, and the consequences.
 ## D5. Deterministic python-pptx renderer
 
 - **Context.** Decks must be editable and reproducible.
-- **Decision.** The renderer draws native charts and text from a validated DeckSpec. It chooses layouts by name and puts provenance in the speaker notes.
-- **Consequences.** The same spec gives the same slide XML (a content hash is checked in tests).
+- **Decision.** The renderer draws native charts and text from a validated DeckSpec. It puts provenance in the speaker notes. The same spec and theme give the same slide XML (a content hash is checked in tests).
+- **Consequences.** Visual styling is allowed to change only when the theme or the layout painters change. See D15 for how layouts are chosen.
 
 ## D6. Identity flows to the data
 
@@ -91,3 +91,9 @@ Each record is short: the context, the decision, and the consequences.
   - `scripts/instabox/bootstrap.sh` runs headlessly and writes a Markdown summary and JUnit XML.
   - The same profile runs in CI (`stack-e2e`). A manual workflow provisions a real InstaBox VM, using the `INSTABOX_API_KEY` repo secret.
 - **Consequences.** The end-to-end path is tested on every PR, and on demand on a fresh VM.
+
+## D15. A layout registry and design tokens, not Office placeholders
+
+- **Context.** Choosing the built-in "Title and Content" layout by name produced a default Office deck: unstyled charts, plain text boxes, no grid.
+- **Decision.** The renderer still starts from the blank layout, chosen by name. Each DeckSpec layout is a painter in a registry. Colour, type and the 12-column grid come from a theme (`DECKSMITH_THEME`). Charts stay native. Text is fitted in code so the content hash does not depend on PowerPoint's auto-fit. The planner maps a narrative role to a layout; the writer may not change the approved layout.
+- **Consequences.** A new layout is a new painter registered with the default registry. A new theme is a token set with its own cover and title treatment. Year-month categories are shown as short month names. The face of a slide does not carry query timestamps; those stay in the speaker notes. The full rationale is in [docs/design-rationale.md](design-rationale.md).

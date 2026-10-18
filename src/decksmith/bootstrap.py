@@ -141,7 +141,7 @@ def _templates() -> TemplateRepository:
 def _renderer(s: Settings) -> Renderer:
     from decksmith.adapters.local.pptx_renderer import PptxRenderer
 
-    return PptxRenderer(s.output_dir, s.pptx_template)
+    return PptxRenderer(s.output_dir, s.pptx_template, s.theme)
 
 
 @dataclass
