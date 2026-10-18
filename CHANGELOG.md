@@ -5,6 +5,38 @@
 
 All notable changes are listed here. The format follows Keep a Changelog, and versions follow SemVer.
 
+## [0.3.0](https://github.com/santoshshinde2012/deck-smith-local/compare/v0.2.0...v0.3.0) (2026-10-18)
+
+
+### ⚠ BREAKING CHANGES
+
+* **api:** /responses no longer reads `custom_inputs.access_token`. Send credentials in the Authorization header or the Databricks Apps forwarded headers.
+* DeckSpec drops the unimplemented `table` layout and `Kpi.delta_fact_id`, and accepts subtitle, bullets, KPIs and charts only on layouts that render them. A deck is no longer built from partial data.
+
+### Features
+
+* design system for executive decks ([099e9e8](https://github.com/santoshshinde2012/deck-smith-local/commit/099e9e85181a63ea4f31c7b6f71f56898d6d5e43))
+* distinguish the three themes and fill the consulting layouts ([a0ecc47](https://github.com/santoshshinde2012/deck-smith-local/commit/a0ecc479b64916b84800f5977a63f3afe9f4354c))
+* give decks a theme, layout registry and consulting-style slides ([fabe3fb](https://github.com/santoshshinde2012/deck-smith-local/commit/fabe3fbbd347779d1d19ec75ec38628cdc5197f1))
+* give the Streamlit workspace an enterprise layout ([e4061ee](https://github.com/santoshshinde2012/deck-smith-local/commit/e4061ee462cfd34b7963bc17cadc8e24c136e571))
+* label the sample review as last quarter ([0b7d867](https://github.com/santoshshinde2012/deck-smith-local/commit/0b7d867a5aa5c625af1318d02dae2f7fe4f5d6c3))
+* record one MLflow trace per graph invocation ([2c49965](https://github.com/santoshshinde2012/deck-smith-local/commit/2c49965a23b4bfceac1ad952a4756f7216419dc2))
+
+
+### Bug Fixes
+
+* **api:** accept user credentials only in request headers ([7d58fc1](https://github.com/santoshshinde2012/deck-smith-local/commit/7d58fc1d6a501726d34eb5546be853d724e20b61))
+* clear the CodeQL notes and tighten sparse cards ([f6c2871](https://github.com/santoshshinde2012/deck-smith-local/commit/f6c28715fcda6d1a339637c214ac8a97f1cd3cc3))
+* **databricks:** poll statements, read every result chunk and map permission failures ([a734480](https://github.com/santoshshinde2012/deck-smith-local/commit/a734480a8fc62136b1733bfe9c4b96e05590091b))
+* drop named regions from user-visible copy ([550e457](https://github.com/santoshshinde2012/deck-smith-local/commit/550e457bc25ba93e650524ae6b127d4fabd107a8))
+* enforce fact references, chart alignment, sources and the approved outline ([c78d40d](https://github.com/santoshshinde2012/deck-smith-local/commit/c78d40d48122e796faa997dce65fddaa6ddce6d2))
+
+
+### Documentation
+
+* describe what the checks prove and what still needs a workspace ([2b500c7](https://github.com/santoshshinde2012/deck-smith-local/commit/2b500c7c4d274b42c8fd93ff414749dd9ba8cecc))
+* **examples:** regenerate the sample deck and add a code-rendered preview ([b063ff4](https://github.com/santoshshinde2012/deck-smith-local/commit/b063ff4e3bf3c7982a458233c6692304edecb70b))
+
 ## [0.2.0](https://github.com/santoshshinde2012/deck-smith-local/compare/v0.1.1...v0.2.0) (2026-10-17)
 
 
