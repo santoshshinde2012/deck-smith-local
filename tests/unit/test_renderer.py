@@ -97,6 +97,7 @@ def test_query_details_are_in_notes_with_query_time_not_freshness(
     assert "queried 2026-10-01" in notes
     source_text = "\n".join(shape.text_frame.text for shape in prs.slides[-1].shapes if shape.has_text_frame)
     assert "SELECT" not in source_text
+    assert "queried" not in source_text
 
 
 def test_section_subtitle_is_rendered_and_cited(

@@ -14,7 +14,7 @@
 
 | ID | Scenario | Tier | Passes when |
 | --- | --- | --- | --- |
-| E1 | DeckSpec schema and renderer golden output | L0 | Same spec and template give the same slide XML; overflow is flagged |
+| E1 | DeckSpec schema and renderer golden output | L0 | Same spec and theme give the same slide XML; overflow is flagged; shapes stay on the slide |
 | E2 | Numeric integrity | L0 | Every `{{fact}}` resolves; no bare digits; chart series match facts |
 | E3 | Interrupt and resume across a restart | L1 | A run resumes from the checkpoint store |
 | E4 | Request to SQL facts to DeckSpec to PPTX | L1 | Deck produced; all deterministic gates pass |

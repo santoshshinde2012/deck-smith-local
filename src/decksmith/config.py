@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     duckdb_path: Path = ROOT / "data" / "lakehouse.duckdb"
     output_dir: Path = ROOT / "out"
     pptx_template: Path | None = None
+    theme: Literal["meridian", "harbor", "graphite"] = "meridian"
     postgres_dsn: str = "postgresql://decksmith:decksmith@localhost:5433/decksmith"
     mlflow_tracking_uri: str = "http://localhost:5001"
     mlflow_experiment: str = "decksmith-local"

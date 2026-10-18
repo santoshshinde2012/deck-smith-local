@@ -75,7 +75,7 @@ The planner picks approved SQL templates. Numeric metrics reference scalar facts
 | `DataSource` | Runs approved SQL as the user | `DuckDBDataSource` (read-only attach) | `DatabricksSqlDataSource` (SQL Statement Execution API with the user's token) |
 | `Catalog` | Logical table name to the object this user may query | `PerUserViewCatalog`, optionally wrapped by `UnityCatalogOssCatalog` | `UnityCatalogPassthrough` (UC enforces row filters) |
 | `TemplateRepository` | Approved, parameterised SQL templates | `FileTemplateRepository` (`src/decksmith/sql/templates/*.sql`) | Same files |
-| `Renderer` | DeckSpec plus facts to `.pptx` | `PptxRenderer` (python-pptx, native charts) | Same |
+| `Renderer` | DeckSpec plus facts to `.pptx` | `PptxRenderer` (python-pptx, theme, layout registry, native charts) | Same |
 | `StateStore` | LangGraph checkpoints | `InMemoryStateStore`, `PostgresStateStore` | `PostgresStateStore` pointed at Lakebase |
 | `Tracer` | One span per node | `NoopTracer`, `MlflowTracer` (MLflow OSS) | `MlflowTracer` (managed MLflow) |
 | `IdentityProvider` | Request headers to a `Principal` | `StaticTokenIdentity` (alice, bob, carol), `JwtIdentity` | `DatabricksAppsIdentity` (`x-forwarded-access-token`) |
@@ -151,7 +151,7 @@ Every service has memory and CPU limits, log rotation and `no-new-privileges`, a
 
 **Single responsibility.** Each class has one reason to change: `SqlCompiler` resolves table names and transpiles SQL; `FactFetcher` turns query rows into `Fact` objects; `DeckNodes` holds one method per graph step; `DeckService` holds the use cases (start, decide, get); `PptxRenderer` only renders; the numeric-integrity rules are pure functions in `domain/integrity.py`.
 
-**Open/closed.** Behaviour is extended without editing the core. The bare-number guardrail is a decorator around any `LLMGateway`, and `UnityCatalogOssCatalog` is a decorator around any `Catalog`. A new backend means a new adapter plus one factory in `bootstrap.py`; nothing in `domain`, `ports` or `application` changes.
+**Open/closed.** Behaviour is extended without editing the core. The bare-number guardrail is a decorator around any `LLMGateway`, and `UnityCatalogOssCatalog` is a decorator around any `Catalog`. A new slide layout is a painter added to `LayoutRegistry`; a new theme is a token set. A new backend means a new adapter plus one factory in `bootstrap.py`; nothing in `domain`, `ports` or `application` changes.
 
 **Liskov substitution.** Local and Databricks adapters satisfy the same `Protocol` with the same error contract: access problems raise `AccessDenied`, bad credentials raise `AuthenticationError`. `tests/contract/` runs the same behavioural assertions against every offline-constructible adapter of a port, so the application has no branches by environment. Every domain error carries a stable `code`, `category`, `status_code` and `retryable` flag, and the API maps errors only from those attributes.
 

@@ -8,7 +8,18 @@ from decksmith.domain.errors import GuardrailViolation
 from decksmith.domain.integrity import contains_bare_digit
 from decksmith.ports.llm import LLMGateway, LLMRequest, LLMResponse
 
-_TEXT_FIELDS = ("title", "subtitle", "bullets", "label", "name", "notes")
+_TEXT_FIELDS = (
+    "title",
+    "subtitle",
+    "bullets",
+    "label",
+    "name",
+    "notes",
+    "quote",
+    "attribution",
+    "heading",
+    "detail",
+)
 
 
 class NoBareNumbersGuardrail:

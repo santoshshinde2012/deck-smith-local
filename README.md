@@ -13,7 +13,7 @@
 
 <img src="docs/examples/sample-deck.png" alt="The five-slide deck DeckSmith builds: title, headline KPIs, monthly churn trend, monthly churn by segment, and a sources slide" width="820">
 
-<sub>A preview reconstructed from the PPTX text, geometry and chart data; fonts and axes may differ in PowerPoint. The deck <code>make demo</code> builds contains native, editable charts and text. <a href="docs/examples/sample-deck.pptx">Download the .pptx</a>.</sub>
+<sub>A preview reconstructed from the PPTX shapes, text and chart data. The file uses Georgia and Calibri; this image may substitute those faces. The deck <code>make demo</code> builds contains native, editable charts and text. <a href="docs/examples/sample-deck.pptx">Download the .pptx</a>.</sub>
 
 </div>
 
@@ -206,7 +206,7 @@ Users can't see each other's runs (404), and anonymous calls are rejected (401).
 | Agent | LangGraph graph with a human-approval interrupt, resumable from a checkpoint; a bounded writer and QA loop |
 | Numeric integrity | Scalar and series type checks, aligned chart categories/units, digit checks across writer text, source coverage, and approved slide structure |
 | Data access | Approved SQL templates in Databricks SQL, transpiled to DuckDB by sqlglot; per-user views locally, Unity Catalog on Databricks |
-| Output | Native, editable `.pptx` from python-pptx, with real charts and a sources appendix |
+| Output | Native, editable `.pptx`: a theme, a 12-column grid, action-title layouts and real charts. See [docs/design-rationale.md](docs/design-rationale.md) |
 | Interfaces | FastAPI (`/v1/decks`, OpenAPI at `/docs`), a Streamlit UI, and an MLflow `ResponsesAgent` endpoint (`/responses`) |
 | Observability | One MLflow span per node, JSON logs with `run_id` and `duration_ms`, and a stable [error taxonomy](docs/errors.md) |
 | Evaluation | Ten golden prompts with deterministic scorers, also runnable through `mlflow.genai.evaluate` |
@@ -260,6 +260,7 @@ Every adapter is chosen with a `DECKSMITH_*` environment variable or a `.env` fi
 | `DECKSMITH_LLM_API_KEY` | empty | Your provider key for `llm=portkey`; held as a secret, never logged |
 | `DECKSMITH_UC_OSS_URL` | `http://localhost:8081` | Unity Catalog OSS, for `catalog=uc_oss` |
 | `DECKSMITH_JWT_SECRET` | empty | At least 32 characters, for `identity=jwt` |
+| `DECKSMITH_THEME` | `meridian` (`harbor`, `graphite`) | Colour and type tokens for the deck |
 | `DECKSMITH_DUCKDB_PATH` | `data/lakehouse.duckdb` | Local lakehouse file |
 | `DECKSMITH_OUTPUT_DIR` | `out` | Where decks are written |
 | `DECKSMITH_LOG_LEVEL`, `DECKSMITH_LOG_JSON` | `INFO`, `true` | Logging |
@@ -366,6 +367,7 @@ The local per-user views emulate row filters; they are **not** a security bounda
 | Document | What it covers |
 | --- | --- |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Diagrams, layers, ports and adapters, SOLID, fidelity of the local emulation |
+| [docs/design-rationale.md](docs/design-rationale.md) | Why the decks look the way they do: titles, grid, type, colour, charts |
 | [docs/decisions.md](docs/decisions.md) | Architecture decision records |
 | [docs/errors.md](docs/errors.md) | Error codes, HTTP statuses and retryability |
 | [docs/test-plan.md](docs/test-plan.md) | Fidelity tiers L0–L4, scenarios E1–E11, phases LD0–LD4 |

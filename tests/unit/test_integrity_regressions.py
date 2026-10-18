@@ -11,7 +11,10 @@ from decksmith.domain.integrity import chart_consistency, numeric_integrity, out
 from decksmith.domain.outline import Outline
 
 
-@pytest.mark.parametrize("field", ["title", "subtitle", "bullets", "label", "name", "notes"])
+@pytest.mark.parametrize(
+    "field",
+    ["title", "subtitle", "bullets", "label", "name", "notes", "quote", "attribution", "heading", "detail"],
+)
 def test_guardrail_checks_every_writer_text_field(field: str) -> None:
     assert _has_bare_number(json.dumps({field: ["Invented 99%"] if field == "bullets" else "Invented 99%"}))
     assert not _has_bare_number(json.dumps({field: "Observed {{fact:f1}}"}))

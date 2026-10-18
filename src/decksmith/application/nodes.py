@@ -137,6 +137,7 @@ class DeckNodes:
                     "template_id": f.source.template_id,
                     "display": format_value(f.value, f.format, f.unit) if f.value is not None else None,
                     "categories": list(f.categories),
+                    "values": list(f.values),
                     "format": f.format,
                     "unit": f.unit,
                 }
