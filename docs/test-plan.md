@@ -18,7 +18,7 @@
 | E2 | Numeric integrity | L0 | Every `{{fact}}` resolves; no bare digits; chart series match facts |
 | E3 | Interrupt and resume across a restart | L1 | A run resumes from the checkpoint store |
 | E4 | Request to SQL facts to DeckSpec to PPTX | L1 | Deck produced; all deterministic gates pass |
-| E5 | Permission emulation | L1 | alice gets EU-West facts only; carol gets a clean refusal |
+| E5 | Permission emulation | L1 | alice gets facts for her region only; carol gets a clean refusal |
 | E6 | Gateway behaviour | L1 | Fallback works; the guardrail returns 446 on a bare digit |
 | E7 | Golden-set evaluation | L2 | Deterministic scorers at 100% |
 | E8 | Cost and latency | L2 | Tokens recorded per node |
@@ -42,6 +42,6 @@ The README records which scenarios run in CI.
 
 | User | Access | Expected |
 | --- | --- | --- |
-| alice | EU-West only | Deck with EU-West figures |
+| alice | Her region only | Deck with figures for her region |
 | bob | All regions | Full deck |
 | carol | None | Clear "no data visible to you" refusal |

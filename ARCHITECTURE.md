@@ -124,7 +124,7 @@ The `Principal`, which carries the user's token, travels in a `ContextVar` (`app
 </p>
 <p align="center"><sub>Open the image for full size · Mermaid source: <a href="docs/diagrams/security-flow.mmd"><code>docs/diagrams/security-flow.mmd</code></a></sub></p>
 
-- **Who you are.** `StaticTokenIdentity` maps the fixed test tokens to alice (EU-West), bob (all regions) and carol (no access). `JwtIdentity` validates HS256 tokens; `DatabricksAppsIdentity` reads the on-behalf-of token that Databricks Apps forwards.
+- **Who you are.** `StaticTokenIdentity` maps the fixed test tokens to alice (her region only), bob (all regions) and carol (no access). `JwtIdentity` validates HS256 tokens; `DatabricksAppsIdentity` reads the on-behalf-of token that Databricks Apps forwards.
 - **What you can see.** Locally, each user has one view per table (`v_<table>__<user>`) and no view means no access. On Databricks, Unity Catalog row filters do the same job. The local views are an emulation, **not a security boundary** ([SECURITY.md](SECURITY.md)).
 - **Whose run it is.** Runs and file downloads are looked up by owner, so another user gets 404. This does not enforce recipient permissions on a copied or emailed PowerPoint. Saved decks reflect query-time access and do not automatically respond to later policy changes.
 - **Secrets.** A provider key for the real-LLM path comes from `DECKSMITH_LLM_API_KEY`, is held as a `SecretStr`, is filled into the gateway config in memory only, and never appears in logs or files.

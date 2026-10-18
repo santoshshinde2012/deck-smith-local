@@ -134,7 +134,7 @@ def test_e5_permissions(container: Container, alice: Principal, bob: Principal, 
         v.run_id: next(f["value"] for f in v.facts if f["source"]["template_id"] == "active_subscriptions")
         for v in (a, b)
     }
-    assert 0 < actives[a.run_id] < actives[b.run_id]  # alice sees EU-West only
+    assert 0 < actives[a.run_id] < actives[b.run_id]  # alice sees her region only
     c = _approve(container, carol)
     assert c.status == "no_data" and c.artifact is None and "visible to you" in c.error
 

@@ -1,7 +1,7 @@
 """The DeckSmith use case, end to end against a running API, with a pass/fail table.
 
 An analyst (bob) asks for a churn review deck, edits and then approves the outline, and downloads an
-editable PPTX whose every number traces back to a fact ID. alice (EU-West only) gets a deck with her
+editable PPTX whose every number traces back to a fact ID. alice (her region only) gets a deck with her
 own numbers, carol (no data access) is refused, and nobody can read someone else's run.
 
 Usage: python scripts/e2e_usecase.py [--api http://localhost:8000] [--out out]
@@ -168,7 +168,7 @@ class UseCase:
 
         bob, alice = active("bob"), active("alice")
         assert 0 < alice < bob, (alice, bob)
-        return f"active subscriptions: bob {bob:,.0f} (all regions) vs alice {alice:,.0f} (EU-West only)"
+        return f"active subscriptions: bob {bob:,.0f} (all regions) vs alice {alice:,.0f} (her region only)"
 
     def carol_refused(self) -> str:
         self.request_outline("carol")
@@ -196,7 +196,7 @@ class UseCase:
             ("4. bob approves; data is fetched as bob", lambda: self.approve("bob")),
             ("5. bob downloads an editable PPTX", lambda: self.download("bob")),
             ("6. scalar and chart values match facts", lambda: self.numbers_trace_to_facts("bob")),
-            ("7. alice (EU-West only) gets her own deck", self.alice_deck),
+            ("7. alice (her region only) gets her own deck", self.alice_deck),
             ("8. alice's deck is consistent too", self.alice_consistent),
             ("9. permissions change the numbers", self.permissions_differ),
             ("10. carol (no access) is refused", self.carol_refused),

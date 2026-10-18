@@ -10,7 +10,7 @@ from decksmith.domain.errors import AuthenticationError
 from decksmith.domain.principal import Principal
 
 TEST_USERS = {
-    "alice-token": Principal(user_id="alice", display_name="Alice (EU-West only)"),
+    "alice-token": Principal(user_id="alice", display_name="Alice (her region only)"),
     "bob-token": Principal(user_id="bob", display_name="Bob (all regions)"),
     "carol-token": Principal(user_id="carol", display_name="Carol (no data access)"),
 }
