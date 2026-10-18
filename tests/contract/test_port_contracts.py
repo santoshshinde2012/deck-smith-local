@@ -168,8 +168,10 @@ def test_state_store_contract(state_store: StateStore) -> None:
 def test_tracer_contract() -> None:
     tracer: Tracer = NoopTracer()
     assert isinstance(tracer, Tracer)
-    with tracer.span("node", {"run_id": "r"}):
-        pass
+    with tracer.span("node", {"run_id": "r"}, span_type="CHAIN") as span:
+        span.set_inputs({"request": "hello"})
+        span.set_outputs({"status": "ok"})
+        span.set_attribute("run_id", "r")
 
 
 def test_template_repository_contract() -> None:

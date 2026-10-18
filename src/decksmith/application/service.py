@@ -10,9 +10,11 @@ from langgraph.types import Command
 from pydantic import BaseModel
 
 from decksmith.application.context import acting_as
+from decksmith.application.trace_records import invocation_output
 from decksmith.domain.errors import RunNotFound
 from decksmith.domain.principal import Principal
 from decksmith.observability import bind_run_id, get_logger, reset_run_id
+from decksmith.ports.tracer import SpanKind, Tracer
 
 log = get_logger(__name__)
 
@@ -33,8 +35,9 @@ class RunView(BaseModel):
 
 
 class DeckService:
-    def __init__(self, graph: Any) -> None:
+    def __init__(self, graph: Any, tracer: Tracer) -> None:
         self._graph = graph
+        self._tracer = tracer
 
     @staticmethod
     def _config(run_id: str) -> dict[str, Any]:
@@ -49,22 +52,63 @@ class DeckService:
             "status": "intake",
             "usage": [],
         }
-        return self._run(run_id, principal, state, "run_started")
+        return self._run(
+            run_id,
+            principal,
+            state,
+            "run_started",
+            trace_name="draft",
+            trace_inputs={
+                "request": request_text,
+                "user_id": principal.user_id,
+                "display_name": principal.display_name,
+                "run_id": run_id,
+            },
+        )
 
     def decide(self, run_id: str, action: Action, principal: Principal, feedback: str = "") -> RunView:
         self._owned(run_id, principal)
         return self._run(
-            run_id, principal, Command(resume={"action": action, "feedback": feedback}), "run_decided", action=action
+            run_id,
+            principal,
+            Command(resume={"action": action, "feedback": feedback}),
+            "run_decided",
+            trace_name="decision",
+            trace_inputs={
+                "run_id": run_id,
+                "user_id": principal.user_id,
+                "display_name": principal.display_name,
+                "action": action,
+                "feedback": feedback,
+            },
+            action=action,
         )
 
-    def _run(self, run_id: str, principal: Principal, graph_input: Any, event: str, **fields: str) -> RunView:
+    def _run(
+        self,
+        run_id: str,
+        principal: Principal,
+        graph_input: Any,
+        event: str,
+        *,
+        trace_name: str,
+        trace_inputs: dict[str, Any],
+        **fields: str,
+    ) -> RunView:
         token = bind_run_id(run_id)
         started = time.perf_counter()
         try:
             log.info(event, extra=fields)
-            with acting_as(principal):
-                self._graph.invoke(graph_input, self._config(run_id))
-            view = self.get(run_id, principal)
+            with self._tracer.span(trace_name, {"run_id": run_id}, span_type=SpanKind.WORKFLOW) as span:
+                span.set_inputs(trace_inputs)
+                try:
+                    with acting_as(principal):
+                        self._graph.invoke(graph_input, self._config(run_id))
+                    view = self.get(run_id, principal)
+                except Exception:
+                    span.set_outputs({"run_id": run_id, "status": "error"})
+                    raise
+                span.set_outputs(invocation_output(view))
             log.info(
                 "run_step_finished",
                 extra={

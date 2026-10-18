@@ -77,7 +77,7 @@ The planner picks approved SQL templates. Numeric metrics reference scalar facts
 | `TemplateRepository` | Approved, parameterised SQL templates | `FileTemplateRepository` (`src/decksmith/sql/templates/*.sql`) | Same files |
 | `Renderer` | DeckSpec plus facts to `.pptx` | `PptxRenderer` (python-pptx, theme, layout registry, native charts) | Same |
 | `StateStore` | LangGraph checkpoints | `InMemoryStateStore`, `PostgresStateStore` | `PostgresStateStore` pointed at Lakebase |
-| `Tracer` | One span per node | `NoopTracer`, `MlflowTracer` (MLflow OSS) | `MlflowTracer` (managed MLflow) |
+| `Tracer` | One trace per graph invocation, child spans per node | `NoopTracer`, `MlflowTracer` (MLflow OSS) | `MlflowTracer` (managed MLflow) |
 | `IdentityProvider` | Request headers to a `Principal` | `StaticTokenIdentity` (alice, bob, carol), `JwtIdentity` | `DatabricksAppsIdentity` (`x-forwarded-access-token`) |
 
 You select each adapter with a `DECKSMITH_*` variable (see [Configuration](README.md#configuration)). The SQL templates are written once, in Databricks SQL. `SqlCompiler` transpiles them with sqlglot for DuckDB; on Databricks the step does nothing.
