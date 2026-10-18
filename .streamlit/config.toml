@@ -1,0 +1,60 @@
+# DeckSmith workspace theme. Colours follow the Meridian deck theme:
+# warm paper, navy cover, copper accent. Widgets pick these up in light and dark mode.
+# Layout chrome that must work in both modes lives in interfaces/ui_view.py and uses
+# the surrounding text colour rather than a second palette.
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "viewer"
+
+[theme]
+base = "light"
+font = "sans-serif"
+headingFont = "serif"
+headingFontSizes = ["2.4rem", "1.55rem", "1.2rem", "1.05rem", "0.95rem", "0.875rem"]
+headingFontWeights = [500, 500, 600, 600, 600, 600]
+baseFontSize = 16
+baseRadius = "0.5rem"
+buttonRadius = "0.4rem"
+showWidgetBorder = true
+showSidebarBorder = true
+paddingTop = "1.25rem"
+paddingBottom = "4rem"
+
+[theme.light]
+primaryColor = "#9C4221"
+backgroundColor = "#F4F0E8"
+secondaryBackgroundColor = "#FBF9F5"
+textColor = "#1C1915"
+linkColor = "#1A3144"
+borderColor = "#8A8175"
+codeBackgroundColor = "#E7E0D4"
+chartCategoricalColors = ["#1A3144", "#9C4221", "#3E6A74", "#7A5E24"]
+
+[theme.dark]
+primaryColor = "#9C4221"
+backgroundColor = "#101920"
+secondaryBackgroundColor = "#1A3144"
+textColor = "#F4F0E8"
+linkColor = "#E7C4B6"
+borderColor = "#8AA0AB"
+codeBackgroundColor = "#152833"
+chartCategoricalColors = ["#C5D0D6", "#E7C4B6", "#8FBFB8", "#E2C48A"]
+
+[theme.light.sidebar]
+primaryColor = "#E7C4B6"
+backgroundColor = "#1A3144"
+secondaryBackgroundColor = "#243E54"
+textColor = "#F4F0E8"
+linkColor = "#E7C4B6"
+borderColor = "#7E96A3"
+
+[theme.dark.sidebar]
+primaryColor = "#E7C4B6"
+backgroundColor = "#0C161C"
+secondaryBackgroundColor = "#152833"
+textColor = "#F4F0E8"
+linkColor = "#E7C4B6"
+borderColor = "#8AA0AB"
