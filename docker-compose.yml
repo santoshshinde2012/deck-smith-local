@@ -82,7 +82,7 @@ services:
   objectstore:
     <<: *defaults
     profiles: ["core"]
-    image: rustfs/rustfs:1.0.2
+    image: rustfs/rustfs:1.0.4
     environment:
       RUSTFS_ACCESS_KEY: ${OBJECT_STORE_ACCESS_KEY:-rustfsadmin}
       RUSTFS_SECRET_KEY: ${OBJECT_STORE_SECRET_KEY:-rustfsadmin}
