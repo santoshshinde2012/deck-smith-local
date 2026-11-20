@@ -10,6 +10,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![Version](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fsantoshshinde2012%2Fdeck-smith-local%2Fmain%2Fpyproject.toml&query=%24.project.version&label=version&color=orange)](CHANGELOG.md)
+[![Buy Me a Coffee](https://img.shields.io/badge/buymeacoffee-black?style=for-the-badge&logo=buymeacoffee&logoColor=white)](https://buymeacoffee.com/santoshshin)
 
 <img src="docs/examples/sample-deck.png" alt="The five-slide deck DeckSmith builds: title, headline KPIs, monthly churn trend, monthly churn by segment, and a sources slide" width="820">
 
